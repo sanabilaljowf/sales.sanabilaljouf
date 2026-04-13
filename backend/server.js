@@ -47,6 +47,21 @@ async function initDB() {
     UNIQUE KEY uq_lookup (type, value)
   ) CHARACTER SET utf8mb4`);
 
+  await db.execute(`CREATE TABLE IF NOT EXISTS suppliers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) CHARACTER SET utf8mb4`);
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS supplier_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_supplier_item (supplier_id, name),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+  ) CHARACTER SET utf8mb4`);
+
   await db.execute(`CREATE TABLE IF NOT EXISTS clients (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -54,28 +69,13 @@ async function initDB() {
     feed_type VARCHAR(100),
     phone VARCHAR(50),
     area VARCHAR(100),
-    sale_type ENUM('wholesale','retail') DEFAULT 'wholesale',
     cons_type ENUM('daily','weekly') DEFAULT 'daily',
     cons DECIMAL(10,2) DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   ) CHARACTER SET utf8mb4`);
 
-  // add sale_type if upgrading from old schema
-  await db.execute(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS sale_type ENUM('wholesale','retail') DEFAULT 'wholesale'`).catch(()=>{});
-
   await db.execute(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_by INT NULL`).catch(()=>{});
-  await db.execute(`CREATE TABLE IF NOT EXISTS purchases (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    client_id INT NOT NULL,
-    date DATE NOT NULL,
-    qty DECIMAL(10,2) NOT NULL,
-    cons DECIMAL(10,2),
-    feed_type VARCHAR(100),
-    note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
-  ) CHARACTER SET utf8mb4`);
 
   await db.execute(`CREATE TABLE IF NOT EXISTS contacts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -138,7 +138,25 @@ async function initDB() {
   await db.execute(`ALTER TABLE order_requests MODIFY COLUMN status ENUM('pending','approved','rejected') DEFAULT 'pending'`).catch(()=>{});
   await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS order_items JSON DEFAULT NULL`).catch(()=>{});
   await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(100) DEFAULT NULL`).catch(()=>{});
-
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS supplier VARCHAR(255) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_date DATE DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_qty DECIMAL(10,2) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_invoice VARCHAR(100) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_price DECIMAL(12,2) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS supplier_payment_status VARCHAR(30) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS sale_date DATE DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS client_payment_status VARCHAR(30) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_feed_type VARCHAR(255) DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS purchase_items JSON DEFAULT NULL`).catch(()=>{});
+  await db.execute(`ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS seq_no INT DEFAULT NULL`).catch(()=>{});
+  // backfill any rows missing seq_no, preserving chronological order
+  try {
+    const [[{cnt}]] = await db.execute('SELECT COUNT(*) AS cnt FROM order_requests WHERE seq_no IS NULL');
+    if (cnt > 0) {
+      await db.execute('SET @n := (SELECT COALESCE(MAX(seq_no),0) FROM order_requests)');
+      await db.execute('UPDATE order_requests SET seq_no = (@n := @n + 1) WHERE seq_no IS NULL ORDER BY created_at, id');
+    }
+  } catch(e) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS order_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
@@ -299,6 +317,59 @@ app.delete('/lookups/:id', auth, adminOrLookups, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── SUPPLIERS ROUTES ─────────────────────────────────────────────────────────
+app.get('/suppliers', auth, async (req, res) => {
+  try {
+    const db = await getPool();
+    const [sups] = await db.execute('SELECT id,name FROM suppliers ORDER BY name');
+    const [items] = await db.execute('SELECT id,supplier_id,name FROM supplier_items ORDER BY name');
+    const byId = {};
+    sups.forEach(s => { s.items = []; byId[s.id] = s; });
+    items.forEach(it => { if (byId[it.supplier_id]) byId[it.supplier_id].items.push({ id: it.id, name: it.name }); });
+    res.json(sups);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/suppliers', auth, adminOrLookups, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'اسم المورد مطلوب' });
+  try {
+    const db = await getPool();
+    const [r] = await db.execute('INSERT INTO suppliers (name) VALUES (?)', [name.trim()]);
+    res.status(201).json({ id: r.insertId, name: name.trim(), items: [] });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'المورد موجود مسبقاً' });
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete('/suppliers/:id', auth, adminOrLookups, async (req, res) => {
+  try {
+    const db = await getPool();
+    await db.execute('DELETE FROM suppliers WHERE id=?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/suppliers/:id/items', auth, adminOrLookups, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'اسم الصنف مطلوب' });
+  try {
+    const db = await getPool();
+    const [[sup]] = await db.execute('SELECT id FROM suppliers WHERE id=?', [req.params.id]);
+    if (!sup) return res.status(404).json({ error: 'المورد غير موجود' });
+    const [r] = await db.execute('INSERT INTO supplier_items (supplier_id,name) VALUES (?,?)', [req.params.id, name.trim()]);
+    res.status(201).json({ id: r.insertId, supplier_id: parseInt(req.params.id), name: name.trim() });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'الصنف موجود مسبقاً لهذا المورد' });
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete('/suppliers/:id/items/:itemId', auth, adminOrLookups, async (req, res) => {
+  try {
+    const db = await getPool();
+    await db.execute('DELETE FROM supplier_items WHERE id=? AND supplier_id=?', [req.params.itemId, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── PENDING LOOKUPS ROUTES ──────────────────────────────────────────────────
 app.get('/lookups/pending', auth, adminOnly, async (req, res) => {
   const db = await getPool();
@@ -420,41 +491,24 @@ app.get('/clients', auth, async (req, res) => {
   try {
     const db = await getPool();
     const [clients] = await db.execute('SELECT c.*, u.username AS created_by_name FROM clients c LEFT JOIN users u ON c.created_by = u.id ORDER BY c.created_at DESC');
-    const [purchases] = await db.execute('SELECT * FROM purchases ORDER BY date DESC');
-    res.json(clients.map(c => ({ ...c, purchases: purchases.filter(p => p.client_id === c.id) })));
+    res.json(clients);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.post('/clients', auth, async (req, res) => {
   try {
-    const { name, activity, feed_type, phone, area, sale_type, cons_type, cons, notes, purchase_date, purchase_qty } = req.body;
+    const { name, activity, feed_type, phone, area, cons_type, cons, notes } = req.body;
     const db = await getPool();
     const [r] = await db.execute(
-      'INSERT INTO clients (name,activity,feed_type,phone,area,sale_type,cons_type,cons,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [name, activity||null, feed_type||null, phone||null, area||null, sale_type||'wholesale', cons_type||'daily', cons||0, notes||null, req.user.id]
+      'INSERT INTO clients (name,activity,feed_type,phone,area,cons_type,cons,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?)',
+      [name, activity||null, feed_type||null, phone||null, area||null, cons_type||'daily', cons||0, notes||null, req.user.id]
     );
     const clientId = r.insertId;
-    if (purchase_date && purchase_qty) {
-      await db.execute('INSERT INTO purchases (client_id,date,qty,cons,feed_type) VALUES (?,?,?,?,?)',
-        [clientId, purchase_date, purchase_qty, cons||0, feed_type||null]);
-    }
-    // queue new contact info + any new lookup values for admin review
     await queuePendingContact(db, name, phone, activity, area, clientId);
     await queuePending(db, 'region', area, clientId);
     await queuePending(db, 'feed_type', feed_type, clientId);
 
     const [[client]] = await db.execute('SELECT * FROM clients WHERE id=?', [clientId]);
-    const [purchases] = await db.execute('SELECT * FROM purchases WHERE client_id=?', [clientId]);
-    res.status(201).json({ ...client, purchases });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.post('/clients/:id/purchases', auth, async (req, res) => {
-  try {
-    const { date, qty, cons, feed_type, note } = req.body;
-    const db = await getPool();
-    const [r] = await db.execute('INSERT INTO purchases (client_id,date,qty,cons,feed_type,note) VALUES (?,?,?,?,?,?)',
-      [req.params.id, date, qty, cons||null, feed_type||null, note||null]);
-    const [[purchase]] = await db.execute('SELECT * FROM purchases WHERE id=?', [r.insertId]);
-    res.status(201).json(purchase);
+    res.status(201).json(client);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.delete('/clients/:id', auth, async (req, res) => {
@@ -467,33 +521,27 @@ app.delete('/clients/:id', auth, async (req, res) => {
 
 
 // ─── CONSUMPTION & ORDER RATE ANALYTICS ──────────────────────────────────────
-// GET /analytics/consumption-rates?sale_type=wholesale|retail&days=90
-// Returns daily/weekly/monthly consumption and order rates per client + summary
+// GET /analytics/consumption-rates?days=90
 app.get('/analytics/consumption-rates', auth, async (req, res) => {
   try {
     const db = await getPool();
-    const { sale_type, days = 90 } = req.query;
-    const daysInt = Math.max(1, parseInt(days) || 90);
-
-    const clientWhere = (sale_type === 'wholesale' || sale_type === 'retail')
-      ? 'WHERE c.sale_type = ?' : '';
-    const clientParams = clientWhere ? [daysInt, sale_type] : [daysInt];
+    const daysInt = Math.max(1, parseInt(req.query.days) || 90);
 
     const [rows] = await db.execute(`
       SELECT
-        c.id, c.name, c.sale_type, c.feed_type, c.area,
-        COUNT(p.id)            AS order_count,
-        COALESCE(SUM(p.qty),0) AS total_qty,
-        MIN(p.date)            AS first_purchase,
-        MAX(p.date)            AS last_purchase,
-        DATEDIFF(CURDATE(), MIN(p.date)) AS days_since_first
-      FROM clients c
-      LEFT JOIN purchases p
-        ON p.client_id = c.id AND p.date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      ${clientWhere}
-      GROUP BY c.id, c.name, c.sale_type, c.feed_type, c.area
-      ORDER BY c.sale_type, total_qty DESC
-    `, clientParams);
+        client_name AS name,
+        MAX(feed_type) AS feed_type,
+        MAX(area) AS area,
+        COUNT(*) AS order_count,
+        COALESCE(SUM(qty),0) AS total_qty,
+        MIN(created_at) AS first_order,
+        MAX(created_at) AS last_order,
+        DATEDIFF(CURDATE(), MIN(created_at)) AS days_since_first
+      FROM order_requests
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY client_name
+      ORDER BY total_qty DESC
+    `, [daysInt]);
 
     const clients = rows.map(row => {
       const activeDays  = Math.max(1, Math.min(Number(row.days_since_first) || daysInt, daysInt));
@@ -502,10 +550,9 @@ app.get('/analytics/consumption-rates', auth, async (req, res) => {
       const dqty        = totalQty   / activeDays;
       const dord        = orderCount / activeDays;
       return {
-        id: row.id, name: row.name, sale_type: row.sale_type,
-        feed_type: row.feed_type, area: row.area,
+        name: row.name, feed_type: row.feed_type, area: row.area,
         period_days: daysInt, order_count: orderCount, total_qty: +totalQty.toFixed(2),
-        first_purchase: row.first_purchase, last_purchase: row.last_purchase,
+        first_purchase: row.first_order, last_purchase: row.last_order,
         consumption_rate: {
           daily:   +(dqty      ).toFixed(2),
           weekly:  +(dqty *  7 ).toFixed(2),
@@ -519,58 +566,174 @@ app.get('/analytics/consumption-rates', auth, async (req, res) => {
       };
     });
 
-    // Aggregate summary by sale_type
-    const summary = {};
+    const summary = { client_count: clients.length, total_qty: 0, order_count: 0 };
     for (const c of clients) {
-      if (!summary[c.sale_type])
-        summary[c.sale_type] = { client_count: 0, total_qty: 0, order_count: 0 };
-      summary[c.sale_type].client_count++;
-      summary[c.sale_type].total_qty   += c.total_qty;
-      summary[c.sale_type].order_count += c.order_count;
+      summary.total_qty += c.total_qty;
+      summary.order_count += c.order_count;
     }
-    for (const type of Object.keys(summary)) {
-      const s   = summary[type];
-      const dqty = s.total_qty   / daysInt;
-      const dord = s.order_count / daysInt;
-      s.total_qty = +s.total_qty.toFixed(2);
-      s.consumption_rate = {
-        daily:   +(dqty      ).toFixed(2),
-        weekly:  +(dqty *  7 ).toFixed(2),
-        monthly: +(dqty * 30 ).toFixed(2),
-      };
-      s.order_rate = {
-        daily:   +(dord      ).toFixed(3),
-        weekly:  +(dord *  7 ).toFixed(2),
-        monthly: +(dord * 30 ).toFixed(2),
-      };
-    }
+    const sdq = summary.total_qty / daysInt;
+    const sdo = summary.order_count / daysInt;
+    summary.total_qty = +summary.total_qty.toFixed(2);
+    summary.consumption_rate = {
+      daily:   +(sdq).toFixed(2),
+      weekly:  +(sdq * 7).toFixed(2),
+      monthly: +(sdq * 30).toFixed(2),
+    };
+    summary.order_rate = {
+      daily:   +(sdo).toFixed(3),
+      weekly:  +(sdo * 7).toFixed(2),
+      monthly: +(sdo * 30).toFixed(2),
+    };
 
     res.json({ period_days: daysInt, summary, clients });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── ORDER REQUESTS ANALYTICS ────────────────────────────────────────────────
+// GET /analytics/orders?days=90
+app.get('/analytics/orders', auth, async (req, res) => {
+  try {
+    const db = await getPool();
+    const daysInt = Math.max(1, parseInt(req.query.days) || 90);
+
+    const [[orSummary]] = await db.execute(`
+      SELECT
+        COUNT(*)                                                          AS total_orders,
+        SUM(CASE WHEN status='approved'  THEN 1 ELSE 0 END)              AS approved,
+        SUM(CASE WHEN status='rejected'  THEN 1 ELSE 0 END)              AS rejected,
+        SUM(CASE WHEN status='pending'   THEN 1 ELSE 0 END)              AS pending,
+        COALESCE(SUM(qty),0)                                              AS total_qty,
+        COALESCE(SUM(CASE WHEN status='approved' THEN qty*price ELSE 0 END),0) AS total_revenue
+      FROM order_requests
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    `, [daysInt]);
+
+    const [orClients] = await db.execute(`
+      SELECT
+        client_name,
+        COUNT(*) AS order_count,
+        COALESCE(SUM(qty),0) AS total_qty,
+        COALESCE(SUM(CASE WHEN status='approved' THEN qty*price ELSE 0 END),0) AS total_revenue,
+        MIN(created_at) AS first_order,
+        MAX(created_at) AS last_order,
+        DATEDIFF(CURDATE(), MIN(created_at)) AS days_since_first
+      FROM order_requests
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY client_name
+      ORDER BY total_qty DESC
+    `, [daysInt]);
+
+    const [orFeeds] = await db.execute(`
+      SELECT client_name, feed_type, COALESCE(SUM(qty),0) AS qty
+      FROM order_requests
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY client_name, feed_type
+      ORDER BY client_name, qty DESC
+    `, [daysInt]);
+
+    const [orPrev] = await db.execute(`
+      SELECT client_name, COALESCE(SUM(qty),0) AS total_qty, COUNT(*) AS order_count
+      FROM order_requests
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY client_name
+    `, [daysInt * 2, daysInt]);
+
+    const prevMap = {};
+    for (const r of orPrev) prevMap[r.client_name] = { qty: parseFloat(r.total_qty)||0, orders: +r.order_count };
+
+    const feedMap = {};
+    for (const f of orFeeds) {
+      if (!feedMap[f.client_name]) feedMap[f.client_name] = [];
+      feedMap[f.client_name].push({ feed_type: f.feed_type || '-', qty: +parseFloat(f.qty).toFixed(0) });
+    }
+
+    const BAGS_PER_TRUCK = 600;
+    const clientsData = orClients.map(c => {
+      const totalBags  = parseFloat(c.total_qty) || 0;
+      const totalTrucks = +(totalBags / BAGS_PER_TRUCK).toFixed(2);
+      const orderCount = parseInt(c.order_count) || 0;
+      const activeDays = Math.max(1, Math.min(Number(c.days_since_first) || daysInt, daysInt));
+      const dqty = totalBags / activeDays;
+      const dord = orderCount / activeDays;
+      return {
+        client_name:    c.client_name,
+        order_count:    orderCount,
+        total_bags:     +totalBags.toFixed(0),
+        total_trucks:   totalTrucks,
+        total_revenue:  +parseFloat(c.total_revenue).toFixed(2),
+        feed_breakdown: feedMap[c.client_name] || [],
+        prev_qty:       (prevMap[c.client_name]||{}).qty || 0,
+        prev_orders:    (prevMap[c.client_name]||{}).orders || 0,
+        change_pct:     (prevMap[c.client_name]||{}).qty ? +(((totalBags - (prevMap[c.client_name].qty)) / prevMap[c.client_name].qty) * 100).toFixed(1) : null,
+        first_order:    c.first_order,
+        last_order:     c.last_order,
+        consumption_rate: {
+          daily:   +(dqty).toFixed(2),
+          weekly:  +(dqty * 7).toFixed(2),
+          monthly: +(dqty * 30).toFixed(0),
+          yearly:  +(dqty * 365).toFixed(0),
+        },
+        order_rate: {
+          daily:   +(dord).toFixed(3),
+          weekly:  +(dord * 7).toFixed(2),
+          monthly: +(dord * 30).toFixed(2),
+        },
+      };
+    });
+
+    const totalBagsAll  = clientsData.reduce((s,c) => s + c.total_bags, 0);
+    const totalOrderAll = clientsData.reduce((s,c) => s + c.order_count, 0);
+    const dqtyAll = totalBagsAll / daysInt;
+    const dordAll = totalOrderAll / daysInt;
+
+    res.json({
+      period_days: daysInt,
+      summary: {
+        total_orders:    +orSummary.total_orders,
+        approved:        +orSummary.approved || 0,
+        rejected:        +orSummary.rejected || 0,
+        pending:         +orSummary.pending || 0,
+        total_qty:       +parseFloat(orSummary.total_qty).toFixed(2),
+        total_revenue:   +parseFloat(orSummary.total_revenue).toFixed(2),
+        client_count:    clientsData.length,
+        total_bags:      +totalBagsAll.toFixed(0),
+        consumption_rate: {
+          daily:   +(dqtyAll).toFixed(2),
+          weekly:  +(dqtyAll * 7).toFixed(2),
+          monthly: +(dqtyAll * 30).toFixed(0),
+          yearly:  +(dqtyAll * 365).toFixed(0),
+        },
+        order_rate: {
+          weekly:  +(dordAll * 7).toFixed(2),
+        },
+      },
+      clients: clientsData,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /clients/:id/consumption-rate?days=90
-// Returns detailed daily/weekly/monthly rates for a single client
 app.get('/clients/:id/consumption-rate', auth, async (req, res) => {
   try {
     const db = await getPool();
     const daysInt = Math.max(1, parseInt(req.query.days) || 90);
 
-    const [[client]] = await db.execute('SELECT id,name,sale_type,feed_type,area FROM clients WHERE id=?', [req.params.id]);
+    const [[client]] = await db.execute('SELECT id,name,feed_type,area FROM clients WHERE id=?', [req.params.id]);
     if (!client) return res.status(404).json({ error: 'العميل غير موجود' });
 
-    const [purchases] = await db.execute(
-      `SELECT date, qty FROM purchases
-       WHERE client_id=? AND date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       ORDER BY date ASC`,
-      [req.params.id, daysInt]
+    const [orders] = await db.execute(
+      `SELECT DATE(created_at) AS date, qty FROM order_requests
+       WHERE client_name=? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       ORDER BY created_at ASC`,
+      [client.name, daysInt]
     );
 
-    const totalQty   = purchases.reduce((s, p) => s + parseFloat(p.qty), 0);
-    const orderCount = purchases.length;
-    const activeDays = purchases.length > 0
+    const totalQty   = orders.reduce((s, p) => s + parseFloat(p.qty), 0);
+    const orderCount = orders.length;
+    const activeDays = orders.length > 0
       ? Math.max(1, Math.min(daysInt,
-          Math.ceil((Date.now() - new Date(purchases[0].date)) / 86400000) || 1))
+          Math.ceil((Date.now() - new Date(orders[0].date)) / 86400000) || 1))
       : daysInt;
 
     const dqty = totalQty   / activeDays;
@@ -591,7 +754,7 @@ app.get('/clients/:id/consumption-rate', auth, async (req, res) => {
         weekly:  +(dord *  7 ).toFixed(2),
         monthly: +(dord * 30 ).toFixed(2),
       },
-      purchases,
+      purchases: orders,
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -643,9 +806,19 @@ app.post('/orders', auth, async (req, res) => {
     }
     if (!client_name || !resolvedQty) return res.status(400).json({ error: 'اسم العميل والكمية مطلوبان' });
     const db = await getPool();
+    // resolve purchase items
+    let pItems = req.body.purchase_items;
+    let pItemsJson = null, pFeed = req.body.purchase_feed_type||null, pQty = req.body.purchase_qty||null, pPrice = req.body.purchase_price||null;
+    if (Array.isArray(pItems) && pItems.length > 0) {
+      pItemsJson = JSON.stringify(pItems);
+      pQty = pItems.reduce((s,i)=>s+(parseFloat(i.qty)||0),0) || null;
+      pFeed = pItems.length === 1 ? (pItems[0].feed_type||null) : pItems.map(i=>i.feed_type).filter(Boolean).join('، ');
+      pPrice = pItems.length === 1 ? (pItems[0].price||null) : null;
+    }
+    const [[{next_seq}]] = await db.execute('SELECT COALESCE(MAX(seq_no),0)+1 AS next_seq FROM order_requests');
     const [r] = await db.execute(
-      'INSERT INTO order_requests (user_id,client_name,phone,area,employee_name,responsible_name,feed_type,qty,price,requested_date,order_time,notes,order_items) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [req.user.id, client_name.trim(), phone||null, area||null, employee_name||null, responsible_name||null, resolvedFeedType, resolvedQty, resolvedPrice, requested_date||null, order_time||null, notes||null, resolvedItems]
+      'INSERT INTO order_requests (user_id,client_name,phone,area,employee_name,responsible_name,feed_type,qty,price,requested_date,order_time,notes,order_items,invoice_number,supplier,purchase_date,purchase_qty,purchase_invoice,purchase_price,purchase_feed_type,purchase_items,supplier_payment_status,delivery_status,sale_date,client_payment_status,seq_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [req.user.id, client_name.trim(), phone||null, area||null, employee_name||null, responsible_name||null, resolvedFeedType, resolvedQty, resolvedPrice, requested_date||null, order_time||null, notes||null, resolvedItems, req.body.invoice_number||null, req.body.supplier||null, req.body.purchase_date||null, pQty, req.body.purchase_invoice||null, pPrice, pFeed, pItemsJson, req.body.supplier_payment_status||null, req.body.delivery_status||null, req.body.sale_date||null, req.body.client_payment_status||null, next_seq]
     );
     const [[row]] = await db.execute(
       'SELECT o.*, u.username FROM order_requests o LEFT JOIN users u ON o.user_id=u.id WHERE o.id=?',
@@ -746,9 +919,21 @@ app.put('/orders/:id', auth, async (req, res) => {
       resolvedFeedType = items.length === 1 ? (items[0].feed_type || null) : items.map(i => i.feed_type).filter(Boolean).join('، ');
       resolvedPrice = items.length === 1 ? (items[0].price || null) : null;
     }
+    const pick = (k) => req.body[k] !== undefined ? (req.body[k] || null) : row[k];
+    // resolve purchase items
+    let uPItems = req.body.purchase_items;
+    let uPItemsJson = row.purchase_items, uPFeed = pick('purchase_feed_type'), uPQty = pick('purchase_qty'), uPPrice = pick('purchase_price');
+    if (Array.isArray(uPItems) && uPItems.length > 0) {
+      uPItemsJson = JSON.stringify(uPItems);
+      uPQty = uPItems.reduce((s,i)=>s+(parseFloat(i.qty)||0),0) || null;
+      uPFeed = uPItems.length === 1 ? (uPItems[0].feed_type||null) : uPItems.map(i=>i.feed_type).filter(Boolean).join('، ');
+      uPPrice = uPItems.length === 1 ? (uPItems[0].price||null) : null;
+    } else if (uPItems !== undefined && uPItems === null) {
+      uPItemsJson = null;
+    }
     await db.execute(
-      'UPDATE order_requests SET client_name=?,phone=?,area=?,responsible_name=?,feed_type=?,qty=?,price=?,requested_date=?,notes=?,order_items=?,invoice_number=? WHERE id=?',
-      [client_name||row.client_name, phone||null, area||null, responsible_name||null, resolvedFeedType, resolvedQty, resolvedPrice, requested_date||null, notes||null, resolvedItems, invoice_number!==undefined?(invoice_number||null):row.invoice_number, req.params.id]
+      'UPDATE order_requests SET client_name=?,phone=?,area=?,responsible_name=?,feed_type=?,qty=?,price=?,requested_date=?,notes=?,order_items=?,invoice_number=?,supplier=?,purchase_date=?,purchase_qty=?,purchase_invoice=?,purchase_price=?,purchase_feed_type=?,purchase_items=?,supplier_payment_status=?,delivery_status=?,sale_date=?,client_payment_status=? WHERE id=?',
+      [client_name||row.client_name, phone||null, area||null, responsible_name||null, resolvedFeedType, resolvedQty, resolvedPrice, requested_date||null, notes||null, resolvedItems, invoice_number!==undefined?(invoice_number||null):row.invoice_number, pick('supplier'), pick('purchase_date'), uPQty, pick('purchase_invoice'), uPPrice, uPFeed, uPItemsJson, pick('supplier_payment_status'), pick('delivery_status'), pick('sale_date'), pick('client_payment_status'), req.params.id]
     );
     const [[updated]] = await db.execute(
       'SELECT o.*, u.username FROM order_requests o LEFT JOIN users u ON o.user_id=u.id WHERE o.id=?',
