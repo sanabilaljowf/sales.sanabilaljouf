@@ -85,6 +85,8 @@ tbody td{padding:10px 14px}
 #orders-list table tbody td{padding:10px 12px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #orders-list table tbody td strong{font-size:.83rem}
 #orders-list .badge{padding:3px 9px;font-size:.76rem}
+#orders-list td.col-green,#orders-list td.col-green *{color:var(--success)!important}
+#orders-list td.col-green .badge{background:transparent!important;border-color:var(--success)!important}
 #orders-list select{min-width:0!important;width:100%!important;padding:3px 5px!important;font-size:.76rem!important}
 /* pinned (sticky) last 3 columns */
 #orders-list table tbody td.pin-col{position:sticky;background:var(--card);z-index:2}
@@ -1984,13 +1986,13 @@ function renderOrders(list){
     const payBadge = (val)=> val ? '<span class="badge '+(payStatusClass[val]||'bu')+'">'+(payStatusLabel[val]||esc(val))+'</span>' : '-';
     rows += '<tr>'
       +(colV('user')?'<td>'+esc(o.username||'-')+'</td>':'')
-      +(colV('invoice')?'<td style="text-align:center;font-weight:600;white-space:nowrap">sj-'+(o.seq_no||o.id)+'</td>':'')
-      +(colV('created_at')?'<td style="white-space:nowrap">'+(o.created_at?'<div>'+fmtDate(o.created_at)+'</div><div style="font-size:.65rem;color:var(--muted)">'+fmtDateTime(o.created_at).slice(-5)+'</div>':'-')+'</td>':'')
-      +(colV('client')?'<td><strong>'+esc(o.client_name||'-')+'</strong></td>':'')
-      +(colV('phone')?'<td'+(o.phone?' style="direction:ltr;text-align:right"':'')+'>'+esc(o.phone||'-')+'</td>':'')
-      +(colV('area')?'<td>'+esc(o.area||'-')+'</td>':'')
-      +(colV('feed_type')?'<td>'+esc(o.feed_type||'-')+'</td>':'')
-      +(colV('qty')?'<td>'+(o.qty?Math.round(qtyNum):'-')+'</td>':'')
+      +(colV('invoice')?'<td class="col-green" style="text-align:center;font-weight:600;white-space:nowrap">sj-'+(o.seq_no||o.id)+'</td>':'')
+      +(colV('created_at')?'<td class="col-green" style="white-space:nowrap">'+(o.created_at?'<div>'+fmtDate(o.created_at)+'</div><div style="font-size:.65rem">'+fmtDateTime(o.created_at).slice(-5)+'</div>':'-')+'</td>':'')
+      +(colV('client')?'<td class="col-green"><strong>'+esc(o.client_name||'-')+'</strong></td>':'')
+      +(colV('phone')?'<td class="col-green"'+(o.phone?' style="direction:ltr;text-align:right"':'')+'>'+esc(o.phone||'-')+'</td>':'')
+      +(colV('area')?'<td class="col-green">'+esc(o.area||'-')+'</td>':'')
+      +(colV('feed_type')?'<td class="col-green">'+esc(o.feed_type||'-')+'</td>':'')
+      +(colV('qty')?'<td class="col-green">'+(o.qty?Math.round(qtyNum):'-')+'</td>':'')
       +(colV('purchase_date')?'<td>'+(o.purchase_date?fmtDate(o.purchase_date):'-')+'</td>':'')
       +(colV('supplier')?'<td>'+esc(o.supplier||'-')+'</td>':'')
       +(colV('purchase_qty')?'<td>'+(o.purchase_qty!=null?fmt(o.purchase_qty,0):'-')+'</td>':'')
@@ -1999,11 +2001,11 @@ function renderOrders(list){
       +(colV('purchase_invoice')?'<td>'+esc(o.purchase_invoice||'-')+'</td>':'')
       +(colV('supplier_payment_status')?'<td>'+payBadge(o.supplier_payment_status)+'</td>':'')
       +(colV('delivery_status')?(o.delivery_status?'<td><span class="badge '+(deliveryClass[o.delivery_status]||'bu')+'">'+esc(deliveryLabel[o.delivery_status]||o.delivery_status)+'</span></td>':'<td>-</td>'):'')
-      +(colV('sale_date')?'<td>'+(o.sale_date?fmtDate(o.sale_date):'-')+'</td>':'')
-      +(colV('invoice_number')?'<td>'+esc(o.invoice_number||'-')+'</td>':'')
-      +(colV('price')?'<td>'+(o.price!=null?fmtMoney(o.price):'-')+'</td>':'')
-      +(colV('sale_total')?'<td>'+(saleTotal!=null?'<strong>'+fmtMoney(saleTotal)+'</strong>':'-')+'</td>':'')
-      +(colV('client_payment_status')?'<td>'+payBadge(o.client_payment_status)+'</td>':'')
+      +(colV('sale_date')?'<td class="col-green">'+(o.sale_date?fmtDate(o.sale_date):'-')+'</td>':'')
+      +(colV('invoice_number')?'<td class="col-green">'+esc(o.invoice_number||'-')+'</td>':'')
+      +(colV('price')?'<td class="col-green">'+(o.price!=null?fmtMoney(o.price):'-')+'</td>':'')
+      +(colV('sale_total')?'<td class="col-green">'+(saleTotal!=null?'<strong>'+fmtMoney(saleTotal)+'</strong>':'-')+'</td>':'')
+      +(colV('client_payment_status')?'<td class="col-green">'+payBadge(o.client_payment_status)+'</td>':'')
       +(colV('notes')?'<td style="font-size:.8rem;white-space:pre-wrap;max-width:220px">'+esc(o.notes||'-')+'</td>':'')
       +(colV('status')?'<td><span class="badge '+sc+'">'+sl+'</span></td>':'')
       +(colV('match_status')?(function(){
