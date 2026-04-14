@@ -33,7 +33,7 @@ body{font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;font-size:15px;backg
 /* NAV */
 #app-screen{display:none}
 nav{background:linear-gradient(135deg,#0f2044 0%,#1e3a5f 60%,#1a3558 100%);color:#fff;display:flex;align-items:center;padding:0 22px;height:62px;gap:4px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,.25)}
-nav .logo{font-size:1.18rem;font-weight:800;white-space:nowrap;letter-spacing:-.01em}
+nav .logo{font-size:1.18rem;font-weight:800;white-space:nowrap;letter-spacing:-.01em;margin-left:18px}
 nav .logo span{color:#60a5fa;text-shadow:0 0 12px rgba(96,165,250,.4)}
 .nav-btn{background:none;border:none;color:#94a3b8;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.92rem;font-weight:600;transition:.18s;white-space:nowrap}
 .nav-btn:hover{background:rgba(255,255,255,.1);color:#fff}
@@ -223,7 +223,7 @@ textarea{resize:vertical;min-height:66px}
 }
 @media(max-width:700px){
   nav{height:auto;padding:6px 10px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px}
-  nav .logo{order:10;white-space:nowrap;font-size:.95rem;margin-right:0}
+  nav .logo{white-space:nowrap;font-size:.95rem;margin-left:10px}
   .nav-btn{font-size:.9rem;font-weight:700;padding:6px 10px;white-space:nowrap}
   .nav-user{display:none}
   .btn-logout{font-size:.75rem;padding:5px 9px;white-space:nowrap}
@@ -453,6 +453,7 @@ body.dark .mh{background:#161d2c}
 <!-- ════════════════════ التطبيق ════════════════════ -->
 <div id="app-screen">
   <nav>
+    <div class="logo">سنابل <span>الجوف</span></div>
     <button class="nav-btn active" id="nav-dashboard" onclick="showPage('dashboard',this)">لوحة التحكم</button>
     <button class="nav-btn" id="nav-notifications" onclick="showPage('notifications',this)">الإشعارات</button>
     <button class="nav-btn" id="nav-rates" onclick="showPage('rates',this)">معدلات الاستهلاك</button>
@@ -462,7 +463,6 @@ body.dark .mh{background:#161d2c}
     <div class="nav-user"><strong id="nav-uname"></strong></div>
     <button class="btn-dark-toggle" id="dark-toggle" onclick="toggleDark()" title="تغيير المظهر">🌙</button>
     <button class="btn-logout" onclick="doLogout()">خروج</button>
-    <div class="logo">سنابل <span>الجوف</span></div>
   </nav>
 
   <main>
@@ -681,9 +681,9 @@ body.dark .mh{background:#161d2c}
       <form onsubmit="submitOrder(event)">
         <div style="margin:2px 0 10px 0;padding-bottom:4px;border-bottom:2px solid var(--primary);font-weight:700;font-size:1rem;color:var(--primary);text-align:center">بيانات البيع للعميل</div>
         <div class="fg">
-          <label>اسم العميل *</label>
+          <label>اسم العميل</label>
           <div class="ac-wrap">
-            <input type="text" id="or-client" required placeholder="ابحث بالاسم أو الهاتف أو المنطقة..." autocomplete="off"
+            <input type="text" id="or-client" placeholder="ابحث بالاسم أو الهاتف أو المنطقة..." autocomplete="off"
               oninput="orClientFilter()"
               onfocus="orClientFilter()"
               onblur="setTimeout(orClientHide,180)">
@@ -709,12 +709,12 @@ body.dark .mh{background:#161d2c}
         <div style="margin:18px 0 10px 0;padding-bottom:4px;border-bottom:2px solid var(--primary);font-weight:700;font-size:1rem;color:var(--primary);text-align:center">بيانات الشراء من المورد</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="fg">
-            <label>تاريخ الشراء *</label>
-            <input id="or-purchase-date" type="date" required>
+            <label>تاريخ الشراء</label>
+            <input id="or-purchase-date" type="date">
           </div>
           <div class="fg">
-            <label>المورد *</label>
-            <input type="text" id="or-supplier" required placeholder="يُعبأ تلقائياً من الشركة" readonly tabindex="-1" style="background:#f3f4f6;cursor:not-allowed">
+            <label>المورد</label>
+            <input type="text" id="or-supplier" placeholder="يُعبأ تلقائياً من الشركة" readonly tabindex="-1" style="background:#f3f4f6;cursor:not-allowed">
           </div>
         </div>
         <div id="or-purchase-items-container"></div>
@@ -739,8 +739,8 @@ body.dark .mh{background:#161d2c}
         <div style="margin:18px 0 10px 0;padding-bottom:4px;border-bottom:2px solid var(--primary);font-weight:700;font-size:1rem;color:var(--primary);text-align:center">بيانات البيع للعميل</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="fg">
-            <label>تاريخ البيع *</label>
-            <input id="or-sale-date" type="date" required>
+            <label>تاريخ البيع</label>
+            <input id="or-sale-date" type="date">
           </div>
           <div class="fg">
             <label>رقم فاتورة البيع</label>
@@ -1452,7 +1452,7 @@ function renderDash(){
 // المستخدمون
 // ══════════════════════════════════════════════════
 async function fetchUsers(){
-  if(!isAdmin())return;
+  if(!isAdmin()&&!hasPerm('manage_users'))return;
   const r=await api('/users');if(!r||!r.ok)return;
   const users=await r.json();
   window._usersCache=users;
@@ -1536,7 +1536,7 @@ function onRoleChange(){
   document.getElementById('perms-section').style.display = role==='user' ? '' : 'none';
 }
 function openUserModal(id){
-  if(!isAdmin())return;
+  if(!isAdmin()&&!hasPerm(id?'edit_users':'create_users'))return;
   const u = id ? (window._usersCache||[]).find(x=>x.id===id) : null;
   const isEdit = !!u;
   document.getElementById('um-alert').innerHTML='';
@@ -1568,8 +1568,8 @@ function openUserModal(id){
 }
 async function submitUser(e){
   e.preventDefault();
-  if(!isAdmin()) return;
   const id = document.getElementById('ue-id').value;
+  if(!isAdmin()&&!hasPerm(id?'edit_users':'create_users')) return;
   const role = document.getElementById('ue-role').value;
   const perms = role==='user' ? ALL_PERMS.filter(p=>{ const el=document.getElementById('p-'+p); return el&&el.checked; }) : [];
   const body = {
@@ -1586,7 +1586,7 @@ async function submitUser(e){
   else document.getElementById('um-alert').innerHTML=`<div class="alert ae">${esc(d.error||'حدث خطأ')}</div>`;
 }
 async function deleteUser(id){
-  if(!isAdmin())return;
+  if(!isAdmin()&&!hasPerm('delete_users'))return;
   if(!confirm('هل أنت متأكد من حذف هذا المستخدم؟'))return;
   const r=await api(`/users/${id}`,{method:'DELETE'});
   if(r&&r.ok)fetchUsers();else alert('حدث خطأ أثناء الحذف');
@@ -1599,7 +1599,7 @@ let _suppressHistory = false;
 function showPage(name,btn,skipHistory){
   if(currentUser&&currentUser.role==='requester'&&name!=='orders'&&name!=='lookups'){return;}
   if(!currentUser)return;
-  if(name==='users'&&!isAdmin()){showPage('dashboard',document.querySelector('.nav-btn'));return;}
+  if(name==='users'&&!isAdmin()&&!(currentUser.permissions||[]).includes('manage_users')){showPage('dashboard',document.querySelector('.nav-btn'));return;}
   if(name==='lookups'&&!isAdmin()&&currentUser.role!=='requester'&&!(currentUser.permissions||[]).includes('lookups')){showPage('dashboard',document.querySelector('.nav-btn'));return;}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -1925,7 +1925,14 @@ function updateScrollBtns(){
   if(!tw || !bar || !inner) return;
   const canScroll = tw.scrollWidth > tw.clientWidth + 4;
   bar.style.display = canScroll ? 'block' : 'none';
-  inner.style.width = tw.scrollWidth + 'px';
+  // Shorten the scrollbar so it ends at the pinned-columns divider (last 3 cols are sticky on the visual left in RTL).
+  const headCells = tw.querySelectorAll('table thead th');
+  let pinnedW = 0;
+  const n = headCells.length;
+  if(n >= 3){ pinnedW = headCells[n-1].offsetWidth + headCells[n-2].offsetWidth + headCells[n-3].offsetWidth; }
+  bar.style.marginLeft = pinnedW + 'px';
+  bar.style.width = 'calc(100% - ' + pinnedW + 'px)';
+  inner.style.width = (tw.scrollWidth - pinnedW) + 'px';
   // sync scrollbar → table
   bar.onscroll = () => { if(_tblScrollSyncing) return; _tblScrollSyncing=true; tw.scrollLeft = bar.scrollLeft; _tblScrollSyncing=false; };
   // sync table → scrollbar
@@ -2043,12 +2050,17 @@ function renderOrders(list){
   rows += '</tbody></table></div>';
   el.innerHTML = rows;
   renderSizer('orders-sizer',[50,100,150,250,500,1000,0],ordersPageSize,'setOrdersPage');
-  setTimeout(()=>{ updateScrollBtns(); applyPinnedColumns(); window.scrollTo(0,_scrollY); const tw2=document.querySelector('#orders-list .tw'); if(tw2) tw2.scrollLeft=_scrollX; }, 50);
+  setTimeout(()=>{ updateScrollBtns(); applyPinnedColumns(); window.scrollTo(0,_scrollY); const tw2=document.querySelector('#orders-list .tw'); if(tw2) tw2.scrollLeft=_scrollX; setupOrdersTableObservers(); }, 50);
+  // Recompute again after fonts/layout settle (handles late shifts that previously needed a refresh).
+  setTimeout(()=>{ updateScrollBtns(); applyPinnedColumns(); }, 250);
+  setTimeout(()=>{ updateScrollBtns(); applyPinnedColumns(); }, 700);
 }
 
 function applyPinnedColumns(){
   const tbl = document.querySelector('#orders-list table');
   if(!tbl) return;
+  // Clear any previous pin state so the function is idempotent.
+  tbl.querySelectorAll('.pin-col').forEach(c=>{ c.classList.remove('pin-col','pin-edge'); c.style.left=''; });
   const headRow = tbl.querySelector('thead tr');
   if(!headRow) return;
   const headCells = headRow.children;
@@ -2071,6 +2083,25 @@ function applyPinnedColumns(){
   tbl.querySelectorAll('tbody tr').forEach(tr => tagRow(tr.children));
 }
 
+let _ordersObserversReady=false, _ordersResizeRaf=0;
+function setupOrdersTableObservers(){
+  if(_ordersObserversReady) return;
+  const recompute = ()=>{
+    if(_ordersResizeRaf) cancelAnimationFrame(_ordersResizeRaf);
+    _ordersResizeRaf = requestAnimationFrame(()=>{ applyPinnedColumns(); updateScrollBtns(); });
+  };
+  window.addEventListener('resize', recompute);
+  if(typeof ResizeObserver !== 'undefined'){
+    const ro = new ResizeObserver(recompute);
+    const tw = document.querySelector('#orders-list .tw');
+    const tbl = document.querySelector('#orders-list table');
+    if(tw) ro.observe(tw);
+    if(tbl) ro.observe(tbl);
+  }
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(recompute).catch(()=>{}); }
+  _ordersObserversReady = true;
+}
+
 function buildFeedOptions(selected){
   const ftypes = allLookups && allLookups.feed_type ? allLookups.feed_type : [];
   return '<option value="">-- اختر --</option>'
@@ -2079,15 +2110,15 @@ function buildFeedOptions(selected){
 function orItemRowHtml(company, feed, qty, price, isFirst){
   const itemOpts = buildSupplierItemOptions(company||'', feed||'');
   return '<div class="or-item-row" style="display:grid;grid-template-columns:1.4fr 1.4fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px">'
-    +'<div class="fg" style="margin:0"><label>الشركة *</label>'
+    +'<div class="fg" style="margin:0"><label>الشركة</label>'
       +'<div class="ac-wrap">'
-        +'<input type="text" class="or-item-company" required placeholder="ابحث..." autocomplete="off" value="'+esc(company||'')+'" oninput="orItemCompanyFilter(this)" onfocus="orItemCompanyFilter(this)" onblur="setTimeout(()=>orItemCompanyHide(this),180)">'
+        +'<input type="text" class="or-item-company" placeholder="ابحث..." autocomplete="off" value="'+esc(company||'')+'" oninput="orItemCompanyFilter(this)" onfocus="orItemCompanyFilter(this)" onblur="setTimeout(()=>orItemCompanyHide(this),180)">'
         +'<div class="ac-list or-item-company-list"></div>'
       +'</div>'
     +'</div>'
-    +'<div class="fg" style="margin:0"><label>الصنف *</label><select class="or-item-feed" required onchange="calcOrderTotal();syncPurchaseFromSale()">'+itemOpts+'</select></div>'
-    +'<div class="fg" style="margin:0"><label>كمية البيع *</label><input class="or-item-qty" type="number" required min="1" step="1" placeholder="0" value="'+(qty||'')+'" oninput="calcOrderTotal()"></div>'
-    +'<div class="fg" style="margin:0"><label>سعر البيع *</label><input class="or-item-price" type="number" required min="0.01" step="0.01" placeholder="0.00" value="'+(price||'')+'" oninput="calcOrderTotal()"></div>'
+    +'<div class="fg" style="margin:0"><label>الصنف</label><select class="or-item-feed" onchange="calcOrderTotal();syncPurchaseFromSale()">'+itemOpts+'</select></div>'
+    +'<div class="fg" style="margin:0"><label>كمية البيع</label><input class="or-item-qty" type="number" min="0" step="any" placeholder="0" value="'+(qty||'')+'" oninput="calcOrderTotal()"></div>'
+    +'<div class="fg" style="margin:0"><label>سعر البيع</label><input class="or-item-price" type="number" min="0" step="any" placeholder="0.00" value="'+(price||'')+'" oninput="calcOrderTotal()"></div>'
     +'<button type="button" onclick="removeOrderItem(this)" style="height:38px;width:36px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;font-size:1.1rem;cursor:pointer;flex-shrink:0;margin-bottom:0;align-self:end'+(isFirst?';visibility:hidden':'')+'">&times;</button>'
     +'</div>';
 }
@@ -2417,9 +2448,9 @@ function calcPurchaseTotal(){
 }
 function purchaseItemRowHtml(feed, qty, price){
   return '<div class="or-pitem-row" style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;align-items:end;margin-bottom:10px">'
-    +'<div class="fg" style="margin:0"><label>الصنف *</label><input class="or-pitem-feed" type="text" readonly tabindex="-1" value="'+esc(feed||'')+'" placeholder="يُعبأ تلقائياً من الصنف" style="background:#f3f4f6;cursor:not-allowed"></div>'
-    +'<div class="fg" style="margin:0"><label>كمية الشراء *</label><input class="or-pitem-qty" type="number" required min="0.01" step="any" placeholder="0" value="'+(qty!=null?qty:'')+'" oninput="calcPurchaseTotal()"></div>'
-    +'<div class="fg" style="margin:0"><label>سعر الشراء *</label><input class="or-pitem-price" type="number" required min="0.01" step="any" placeholder="0.00" value="'+(price!=null?price:'')+'" oninput="calcPurchaseTotal()"></div>'
+    +'<div class="fg" style="margin:0"><label>الصنف</label><input class="or-pitem-feed" type="text" readonly tabindex="-1" value="'+esc(feed||'')+'" placeholder="يُعبأ تلقائياً من الصنف" style="background:#f3f4f6;cursor:not-allowed"></div>'
+    +'<div class="fg" style="margin:0"><label>كمية الشراء</label><input class="or-pitem-qty" type="number" min="0" step="any" placeholder="0" value="'+(qty!=null?qty:'')+'" oninput="calcPurchaseTotal()"></div>'
+    +'<div class="fg" style="margin:0"><label>سعر الشراء</label><input class="or-pitem-price" type="number" min="0" step="any" placeholder="0.00" value="'+(price!=null?price:'')+'" oninput="calcPurchaseTotal()"></div>'
     +'</div>';
 }
 
@@ -2471,9 +2502,8 @@ async function submitOrder(e){
     const feed_type = row.querySelector('.or-item-feed').value;
     const qty = row.querySelector('.or-item-qty').value;
     const price = row.querySelector('.or-item-price').value;
-    if(qty) items.push({company: company||null, feed_type: feed_type||null, qty: parseFloat(qty), price: price ? parseFloat(price) : null});
+    if(company || feed_type || qty || price) items.push({company: company||null, feed_type: feed_type||null, qty: qty?parseFloat(qty):null, price: price ? parseFloat(price) : null});
   });
-  if(!items.length){ document.getElementById('om-alert').innerHTML='<div class="alert ae">يرجى إدخال كمية واحدة على الأقل</div>'; return; }
   const purchase_items = [];
   document.querySelectorAll('#or-purchase-items-container .or-pitem-row').forEach(row => {
     const feed_type = row.querySelector('.or-pitem-feed').value;
@@ -2526,9 +2556,9 @@ function openOrderStatusModal(id){
   document.getElementById('osm-status').value=o.status||'pending';
   document.getElementById('osm-delivery').value=o.delivery_status||'';
   document.getElementById('osm-note').value=o.admin_note||'';
-  // show/hide الحالة and ملاحظة based on role
-  const adminOnly = isAdmin() || (currentUser && (currentUser.permissions||[]).includes('edit_all_orders'));
-  document.getElementById('osm-status').closest('.fg').style.display = adminOnly ? '' : 'none';
+  // show/hide الحالة based on manage_orders permission only
+  const canChangeStatus = isAdmin() || currentUser.role==='requester' || (currentUser && (currentUser.permissions||[]).includes('manage_orders'));
+  document.getElementById('osm-status').closest('.fg').style.display = canChangeStatus ? '' : 'none';
   document.getElementById('order-status-modal').classList.add('open');
 }
 
@@ -2537,7 +2567,7 @@ async function submitOrderStatus(){
   const body = {
     delivery_status: document.getElementById('osm-delivery').value,
   };
-  if(isAdmin()||(currentUser&&(currentUser.permissions||[]).includes('edit_all_orders'))){
+  if(isAdmin()||currentUser.role==='requester'||(currentUser&&(currentUser.permissions||[]).includes('manage_orders'))){
     body.status = document.getElementById('osm-status').value;
     body.admin_note = document.getElementById('osm-note').value.trim();
   }

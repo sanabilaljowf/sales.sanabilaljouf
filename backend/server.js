@@ -233,12 +233,12 @@ app.get('/auth/me', auth, async (req, res) => {
 });
 
 // ─── USERS ROUTES ─────────────────────────────────────────────────────────────
-app.get('/users', auth, adminOnly, async (req, res) => {
+app.get('/users', auth, hasPerm('manage_users'), async (req, res) => {
   const db = await getPool();
   const [rows] = await db.execute('SELECT id,username,role,full_name,job_title,permissions,created_at FROM users ORDER BY created_at');
   res.json(rows);
 });
-app.post('/users', auth, adminOnly, async (req, res) => {
+app.post('/users', auth, hasPerm('manage_users'), async (req, res) => {
   const { username, password, role, full_name, job_title, permissions } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
   try {
@@ -253,7 +253,7 @@ app.post('/users', auth, adminOnly, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.put('/users/:id', auth, adminOnly, async (req, res) => {
+app.put('/users/:id', auth, hasPerm('manage_users'), async (req, res) => {
   let { username, password, role, full_name, job_title, permissions } = req.body;
   try {
     const db = await getPool();
@@ -278,7 +278,7 @@ app.put('/users/:id', auth, adminOnly, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.delete('/users/:id', auth, adminOnly, async (req, res) => {
+app.delete('/users/:id', auth, hasPerm('manage_users'), async (req, res) => {
   if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'لا يمكنك حذف حسابك الخاص' });
   const db = await getPool();
   await db.execute('DELETE FROM users WHERE id=?', [req.params.id]);
@@ -804,7 +804,6 @@ app.post('/orders', auth, async (req, res) => {
       resolvedFeedType = items.length === 1 ? (items[0].feed_type || null) : items.map(i => i.feed_type).filter(Boolean).join('، ');
       resolvedPrice = items.length === 1 ? (items[0].price || null) : null;
     }
-    if (!client_name || !resolvedQty) return res.status(400).json({ error: 'اسم العميل والكمية مطلوبان' });
     const db = await getPool();
     // resolve purchase items
     let pItems = req.body.purchase_items;
@@ -818,7 +817,7 @@ app.post('/orders', auth, async (req, res) => {
     const [[{next_seq}]] = await db.execute('SELECT COALESCE(MAX(seq_no),0)+1 AS next_seq FROM order_requests');
     const [r] = await db.execute(
       'INSERT INTO order_requests (user_id,client_name,phone,area,employee_name,responsible_name,feed_type,qty,price,requested_date,order_time,notes,order_items,invoice_number,supplier,purchase_date,purchase_qty,purchase_invoice,purchase_price,purchase_feed_type,purchase_items,supplier_payment_status,delivery_status,sale_date,client_payment_status,seq_no) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [req.user.id, client_name.trim(), phone||null, area||null, employee_name||null, responsible_name||null, resolvedFeedType, resolvedQty, resolvedPrice, requested_date||null, order_time||null, notes||null, resolvedItems, req.body.invoice_number||null, req.body.supplier||null, req.body.purchase_date||null, pQty, req.body.purchase_invoice||null, pPrice, pFeed, pItemsJson, req.body.supplier_payment_status||null, req.body.delivery_status||null, req.body.sale_date||null, req.body.client_payment_status||null, next_seq]
+      [req.user.id, (client_name||'').trim()||null, phone||null, area||null, employee_name||null, responsible_name||null, resolvedFeedType, resolvedQty||null, resolvedPrice, requested_date||null, order_time||null, notes||null, resolvedItems, req.body.invoice_number||null, req.body.supplier||null, req.body.purchase_date||null, pQty, req.body.purchase_invoice||null, pPrice, pFeed, pItemsJson, req.body.supplier_payment_status||null, req.body.delivery_status||null, req.body.sale_date||null, req.body.client_payment_status||null, next_seq]
     );
     const [[row]] = await db.execute(
       'SELECT o.*, u.username FROM order_requests o LEFT JOIN users u ON o.user_id=u.id WHERE o.id=?',
@@ -847,11 +846,13 @@ app.get('/orders/:id/history', auth, async (req, res) => {
 });
 
 app.put('/orders/:id/status', auth, (req,res,next)=>{
-  if(req.user.role==='admin'||req.user.role==='requester'||(req.user.permissions||[]).some(p=>['manage_orders','order_requests','edit_all_orders'].includes(p))) return next();
+  if(req.user.role==='admin'||req.user.role==='requester'||(req.user.permissions||[]).some(p=>['manage_orders','edit_all_orders','order_requests'].includes(p))) return next();
   res.status(403).json({error:'ليس لديك صلاحية'});
 }, async (req, res) => {
   try {
-    const { status, delivery_status, admin_note } = req.body;
+    const canChangeStatus = req.user.role==='admin' || req.user.role==='requester' || (req.user.permissions||[]).includes('manage_orders');
+    let { status, delivery_status, admin_note } = req.body;
+    if(!canChangeStatus){ status = undefined; admin_note = undefined; }
     if (status && !['approved','rejected','pending'].includes(status))
       return res.status(400).json({ error: 'حالة غير صالحة' });
     const db = await getPool();
