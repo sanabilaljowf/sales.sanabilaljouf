@@ -458,9 +458,7 @@ body.dark .mh{background:#161d2c}
 <div id="app-screen">
   <nav>
     <div class="logo">سنابل <span>الجوف</span></div>
-    <button class="nav-btn active" id="nav-dashboard" onclick="showPage('dashboard',this)">لوحة التحكم</button>
     <button class="nav-btn" id="nav-notifications" onclick="showPage('notifications',this)">الإشعارات</button>
-    <button class="nav-btn" id="nav-rates" onclick="showPage('rates',this)">معدلات الاستهلاك</button>
     <button class="nav-btn" id="nav-lookups" style="display:none" onclick="showPage('lookups',this)">المرجعيات</button>
     <button class="nav-btn" id="nav-users" style="display:none" onclick="showPage('users',this)">المستخدمون</button>
     <button class="nav-btn" id="nav-orders" style="display:none" onclick="showPage('orders',this)">استقبال طلبات العملاء</button>
@@ -470,52 +468,10 @@ body.dark .mh{background:#161d2c}
   </nav>
 
   <main>
-    <!-- لوحة التحكم -->
-    <div id="page-dashboard" class="page active">
-      <div class="cards">
-        <div class="card"><div class="cl">إجمالي الطلبات</div><div class="cv" id="s-total">-</div></div>
-        <div class="card urgent"><div class="cl">قيد الانتظار</div><div class="cv" id="s-urgent">-</div></div>
-        <div class="card sales"><div class="cl">مبيعات الجملة (الشهر)</div><div class="cv" id="s-sales-wh">-</div></div>
-        <div class="card cycle"><div class="cl">متوسط دورة الطلب (يوم)</div><div class="cv" id="s-cycle">-</div></div>
-      </div>
-      <div class="tw">
-        <div class="th"><h2>🚛 آخر الطلبات</h2></div>
-        <table><thead><tr><th>رقم</th><th>العميل</th><th>المنطقة</th><th>نوع العلف</th><th>الكمية</th><th>الحالة</th></tr></thead>
-        <tbody id="dash-tb-wh"><tr><td colspan="6" class="loading">جارٍ التحميل...</td></tr></tbody></table>
-      </div>
-    </div>
-
     <!-- الإشعارات -->
     <div id="page-notifications" class="page">
       <div class="sh"><h1>الإشعارات</h1></div>
       <div class="notif-list" id="notif-list"><div class="card" style="text-align:center;padding:40px;color:#6b7280">لا توجد إشعارات حالياً ✅</div></div>
-    </div>
-
-    <!-- معدلات الاستهلاك -->
-    <div id="page-rates" class="page">
-      <div class="sh"><h1>معدلات الاستهلاك</h1></div>
-      <div class="filter-bar">
-        <select id="r-days" onchange="fetchRates()">
-          <option value="30">آخر 30 يوم</option>
-          <option value="90" selected>آخر 90 يوم</option>
-          <option value="180">آخر 180 يوم</option>
-          <option value="365">آخر سنة</option>
-        </select>
-        <input type="text" id="r-search" oninput="renderRates()" placeholder="بحث باسم العميل..." style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;font-family:inherit;min-width:160px;background:var(--card);color:inherit">
-      </div>
-      <div id="rates-summary" class="cards" style="margin-bottom:22px"></div>
-      <div class="tw" style="overflow-x:auto">
-        <table style="min-width:1050px;font-size:.84rem">
-          <thead><tr>
-            <th>العميل</th>
-            <th>عدد الطلبات</th><th>إجمالي (كيس)</th><th>يساوي (سيارة)</th><th>تفصيل الأنواع</th>
-            <th>يومي</th><th>أسبوعي</th><th>شهري</th><th>سنوي</th>
-            <th>مقارنة بالفترة السابقة</th>
-            <th>آخر طلب</th>
-          </tr></thead>
-          <tbody id="rates-tb"><tr><td colspan="11" class="loading">جارٍ التحميل...</td></tr></tbody>
-        </table>
-      </div>
     </div>
 
     <!-- المرجعيات -->
@@ -900,7 +856,7 @@ body.dark .mh{background:#161d2c}
 // ══════════════════════════════════════════════════
 // الحالة
 // ══════════════════════════════════════════════════
-let allClients=[], allContacts=[], allPendingContacts=[], allLookups={client_name:[],region:[],feed_type:[]}, currentUser=null, curClientId=null;
+let allContacts=[], allPendingContacts=[], allLookups={client_name:[],region:[],feed_type:[]}, currentUser=null, curClientId=null;
 let ordersPageSize=50;
 function setOrdersPage(n){ordersPageSize=n;applyOrderFilters();}
 
@@ -962,11 +918,8 @@ function showApp(){
   const p = currentUser.permissions||[];
   const hp = k => currentUser.role==='admin'||p.includes(k);
   // show nav buttons based on permissions
-  const navMap = {'notifications':'nav-notifications','rates':'nav-rates','lookups':'nav-lookups','manage_users':'nav-users','order_requests':'nav-orders','manage_orders':'nav-orders'};
   document.querySelectorAll('.nav-btn').forEach(b=>{ if(b.id&&b.id.startsWith('nav-')) b.style.display='none'; });
-  if(hp('dashboard')) document.querySelector('.nav-btn[onclick*="dashboard"]').style.display='';
   if(hp('notifications')) document.getElementById('nav-notifications')&&(document.getElementById('nav-notifications').style.display='');
-  if(hp('rates')) document.getElementById('nav-rates')&&(document.getElementById('nav-rates').style.display='');
   if(hp('lookups')) document.getElementById('nav-lookups')&&(document.getElementById('nav-lookups').style.display='');
   if(hp('manage_users')) document.getElementById('nav-users')&&(document.getElementById('nav-users').style.display='');
   if(hp('order_requests')||hp('manage_orders')) document.getElementById('nav-orders')&&(document.getElementById('nav-orders').style.display='');
@@ -974,26 +927,19 @@ function showApp(){
   if(exportBtn) exportBtn.style.display = hasPerm('export_orders') ? '' : 'none';
   const newOrderBtn = document.getElementById('new-order-btn');
   if(newOrderBtn) newOrderBtn.style.display = (isAdmin()||currentUser.role==='requester'||hasPerm('create_orders')||hasPerm('order_requests')||hasPerm('manage_orders')) ? '' : 'none';
-  if(hp('dashboard')) fetchClients();
   if(hp('notifications')||hp('lookups')) { fetchLookups(); fetchPending(); fetchPendingContacts(); }
   fetchContacts();
   fetchSuppliers();
   if(hp('order_requests')||hp('manage_orders')) startOrdersPoller();
   const urlPage = location.pathname.replace(/^\//,'').split('/')[0];
   const savedPage = localStorage.getItem('ft_page');
-  const wanted = urlPage || (savedPage && savedPage !== 'dashboard' ? savedPage : '');
+  const wanted = urlPage || savedPage || '';
   if(wanted){
     const btn = document.querySelector('[onclick*="showPage(\'' + wanted + '\'"]');
     if(btn && btn.style.display !== 'none') { showPage(wanted, btn); return; }
   }
-  // if dashboard is hidden, redirect to first visible nav page
-  if(!hp('dashboard')){
-    const firstBtn = document.querySelector('.nav-btn[style*="display"]') || document.querySelector('.nav-btn:not([style*="none"])');
-    if(firstBtn) firstBtn.click();
-  } else {
-    // ensure dashboard URL is reflected
-    if(location.pathname !== '/dashboard' && location.pathname !== '/') history.replaceState({page:'dashboard'},'','/dashboard');
-  }
+  const firstBtn = document.querySelector('.nav-btn:not([style*="none"])') || document.querySelector('.nav-btn[style*="display"]');
+  if(firstBtn) firstBtn.click();
 }
 (async()=>{
   const tok=getToken();
@@ -1419,40 +1365,6 @@ function syncHidden(hiddenId,val){
 function fmt(n,d=0){return n===null||n===undefined?'-':parseFloat(n).toFixed(d);}
 
 // ══════════════════════════════════════════════════
-// لوحة التحكم — مبنية على طلبات الجملة
-// ══════════════════════════════════════════════════
-async function fetchClients(){
-  const r=await api('/orders');
-  if(!r)return;
-  const rows=await r.json();
-  allClients=rows;
-  renderDash();
-}
-function renderDash(){
-  const rows=allClients||[];
-  const total=rows.length;
-  const pending=rows.filter(o=>o.status==='pending').length;
-  const now=new Date();
-  const mSales=rows.filter(o=>{const d=new Date(o.created_at);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((s,o)=>s+parseFloat(o.qty||0),0);
-  const approved=rows.filter(o=>o.status==='approved' && o.requested_date && o.created_at).map(o=>(new Date(o.requested_date)-new Date(o.created_at))/86400000).filter(d=>d>=0);
-  const avgCycle=approved.length?Math.round(approved.reduce((a,b)=>a+b,0)/approved.length):0;
-  const el=id=>document.getElementById(id);
-  if(el('s-total')) el('s-total').textContent=total;
-  if(el('s-urgent')) el('s-urgent').textContent=pending;
-  if(el('s-sales-wh')) el('s-sales-wh').textContent=mSales>0?fmt(mSales,0)+' شاحنة':'٠';
-  if(el('s-cycle')) el('s-cycle').textContent=avgCycle||'-';
-  const tb=el('dash-tb-wh');
-  if(tb){
-    const latest=[...rows].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,15);
-    if(!latest.length){tb.innerHTML='<tr><td colspan="6" class="empty"><div class="ei">📋</div>لا توجد طلبات</td></tr>';}
-    else{
-      const statusLbl={pending:'قيد الانتظار',approved:'موافق عليه',rejected:'مرفوض'};
-      tb.innerHTML=latest.map(o=>'<tr><td>sj-'+(o.seq_no||'-')+'</td><td><strong>'+esc(o.client_name||'-')+'</strong></td><td>'+esc(o.area||'-')+'</td><td>'+esc(o.feed_type||'-')+'</td><td>'+fmt(o.qty,0)+'</td><td>'+esc(statusLbl[o.status]||o.status||'-')+'</td></tr>').join('');
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════
 // المستخدمون
 // ══════════════════════════════════════════════════
 async function fetchUsers(){
@@ -1485,10 +1397,8 @@ async function fetchUsers(){
 }
 const PERM_CATEGORIES = [
   {title:'الوصول للأقسام', perms:[
-    {key:'dashboard',       label:'لوحة التحكم'},
     {key:'order_requests',  label:'استقبال طلبات العملاء'},
     {key:'notifications',   label:'الإشعارات'},
-    {key:'rates',           label:'معدلات الاستهلاك'},
     {key:'lookups',         label:'المرجعيات'},
     {key:'manage_users',    label:'إدارة المستخدمين'},
   ]},
@@ -1511,9 +1421,6 @@ const PERM_CATEGORIES = [
     {key:'create_users', label:'إضافة موظف'},
     {key:'edit_users',   label:'تعديل موظف'},
     {key:'delete_users', label:'حذف موظف'},
-  ]},
-  {title:'معدلات الاستهلاك', perms:[
-    {key:'edit_rates', label:'تعديل المعدلات'},
   ]},
 ];
 const ALL_PERMS = PERM_CATEGORIES.flatMap(c=>c.perms.map(p=>p.key));
@@ -1603,8 +1510,8 @@ let _suppressHistory = false;
 function showPage(name,btn,skipHistory){
   if(currentUser&&currentUser.role==='requester'&&name!=='orders'&&name!=='lookups'){return;}
   if(!currentUser)return;
-  if(name==='users'&&!isAdmin()&&!(currentUser.permissions||[]).includes('manage_users')){showPage('dashboard',document.querySelector('.nav-btn'));return;}
-  if(name==='lookups'&&!isAdmin()&&currentUser.role!=='requester'&&!(currentUser.permissions||[]).includes('lookups')){showPage('dashboard',document.querySelector('.nav-btn'));return;}
+  if(name==='users'&&!isAdmin()&&!(currentUser.permissions||[]).includes('manage_users')){return;}
+  if(name==='lookups'&&!isAdmin()&&currentUser.role!=='requester'&&!(currentUser.permissions||[]).includes('lookups')){return;}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const pg = document.getElementById('page-'+name);
@@ -1618,14 +1525,13 @@ function showPage(name,btn,skipHistory){
     if(location.pathname !== target) history.pushState({page:name}, '', target);
   }
   if(name==='users')fetchUsers();
-  if(name==='rates') fetchRates();
   if(name==='lookups'){fetchLookups();fetchPending();}
   if(name==='lookups'){fetchLookups();fetchPending();fetchPendingContacts();fetchContacts();}
   if(name==='orders') startOrdersPoller(); else stopOrdersPoller();
 }
 window.addEventListener('popstate', (e)=>{
   if(!currentUser) return;
-  const name = (e.state && e.state.page) || location.pathname.replace(/^\//,'').split('/')[0] || 'dashboard';
+  const name = (e.state && e.state.page) || location.pathname.replace(/^\//,'').split('/')[0] || 'orders';
   _suppressHistory = true;
   showPage(name, null, true);
   _suppressHistory = false;
@@ -1643,80 +1549,6 @@ function renderSizer(containerId,sizes,current,setter){
 }
 function fmtDate(s){if(!s)return'-';var d=new Date(s);return String(d.getDate()).padStart(2,'0')+'/'+(String(d.getMonth()+1).padStart(2,'0'))+'/'+d.getFullYear();}
 function fmtDateTime(s){if(!s)return'-';var d=new Date(s);return fmtDate(s)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
-setInterval(fetchClients,60000);
-
-// ══════════════════════════════════════════════════
-// معدلات الاستهلاك
-// ══════════════════════════════════════════════════
-let _ratesData = null;
-
-async function fetchRates(){
-  const days=(document.getElementById('r-days')||{}).value||'90';
-  const tb=document.getElementById('rates-tb');
-  if(tb)tb.innerHTML='<tr><td colspan="11" class="loading">جارٍ التحميل...</td></tr>';
-  const r=await api(`/analytics/orders?days=${days}`);
-  if(!r||!r.ok){
-    if(tb)tb.innerHTML='<tr><td colspan="11" class="loading" style="color:#dc2626">حدث خطأ أثناء التحميل</td></tr>';
-    return;
-  }
-  _ratesData = await r.json();
-  renderRates();
-}
-
-function renderRates(){
-  const data = _ratesData;
-  if(!data) return;
-  const s=data.summary||{};
-  const cr=s.consumption_rate||{};
-  const fmt=n=>Number(n).toLocaleString('ar-SA');
-  const sumEl=document.getElementById('rates-summary');
-  if(sumEl) sumEl.innerHTML=`
-    <div class="card"><div class="cl">عدد العملاء</div><div class="cv">${fmt(s.client_count||0)}</div></div>
-    <div class="card"><div class="cl">إجمالي الطلبات</div><div class="cv">${fmt(s.total_orders)}</div></div>
-    <div class="card" style="border-right:3px solid #16a34a"><div class="cl">موافق عليها</div><div class="cv" style="color:#16a34a">${fmt(s.approved)}</div></div>
-    <div class="card sales"><div class="cl">إجمالي المبيعات</div><div class="cv">${fmt(s.total_revenue)} ر.س</div></div>
-    <div class="card" style="border-right:3px solid #2563eb"><div class="cl">استهلاك يومي (كيس)</div><div class="cv" style="color:#2563eb">${cr.daily||0}</div></div>
-    <div class="card" style="border-right:3px solid #7c3aed"><div class="cl">استهلاك شهري (كيس)</div><div class="cv" style="color:#7c3aed">${cr.monthly||0}</div></div>
-    <div class="card" style="border-right:3px solid #0891b2"><div class="cl">استهلاك سنوي (كيس)</div><div class="cv" style="color:#0891b2">${cr.yearly||0}</div></div>`;
-
-  const search=((document.getElementById('r-search')||{}).value||'').trim().toLowerCase();
-  let clients = data.clients||[];
-  if(search) clients = clients.filter(c=>(c.client_name||'').toLowerCase().includes(search));
-
-  const tb=document.getElementById('rates-tb');
-  if(!clients.length){
-    tb.innerHTML='<tr><td colspan="11" class="empty"><div class="ei">📊</div>لا توجد بيانات</td></tr>';
-    return;
-  }
-  tb.innerHTML=clients.map(c=>{
-    const r=c.consumption_rate||{};
-    const feedBreak=(c.feed_breakdown||[]).map(f=>'<div style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(f.feed_type)+'</span><strong>'+f.qty+'</strong></div>').join('');
-    // comparison
-    let compareHtml='-';
-    if(c.change_pct!==null&&c.change_pct!==undefined){
-      const pct=c.change_pct;
-      const arrow=pct>0?'▲':pct<0?'▼':'●';
-      const color=pct>0?'#16a34a':pct<0?'#dc2626':'var(--muted)';
-      const label=pct>0?'زيادة':pct<0?'انخفاض':'ثابت';
-      compareHtml=`<div style="text-align:center"><span style="color:${color};font-weight:700;font-size:.9rem">${arrow} ${Math.abs(pct)}%</span><div style="font-size:.7rem;color:var(--muted)">${label}</div><div style="font-size:.68rem;color:var(--muted)">سابق: ${c.prev_qty} كيس</div></div>`;
-    } else if(c.total_bags>0){
-      compareHtml='<div style="text-align:center"><span style="color:#16a34a;font-weight:700">جديد</span><div style="font-size:.7rem;color:var(--muted)">لا يوجد بيانات سابقة</div></div>';
-    }
-    return`<tr>
-      <td><strong>${esc(c.client_name)}</strong></td>
-      <td style="text-align:center;font-weight:600">${c.order_count}</td>
-      <td style="text-align:center;font-weight:600">${c.total_bags||0}</td>
-      <td style="text-align:center;font-weight:600;color:#2563eb">${c.total_trucks||0}</td>
-      <td style="font-size:.78rem;min-width:120px">${feedBreak||'-'}</td>
-      <td style="text-align:center">${r.daily||0}</td>
-      <td style="text-align:center">${r.weekly||0}</td>
-      <td style="text-align:center;font-weight:600">${r.monthly||0}</td>
-      <td style="text-align:center;font-weight:600;color:#7c3aed">${r.yearly||0}</td>
-      <td style="min-width:110px">${compareHtml}</td>
-      <td style="font-size:.78rem;color:var(--muted);white-space:nowrap">${c.last_order?fmtDate(c.last_order):'-'}</td>
-    </tr>`;
-  }).join('');
-}
 
 // ══════════════════════════════════════════════════
 // استقبال طلبات العملاء (Order Requests)
