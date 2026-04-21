@@ -126,15 +126,6 @@ body.dark #orders-list table tbody td.pin-edge{box-shadow:inset -3px 0 0 0 #f59e
 .btn-s{background:#dcfce7;color:#15803d;border:1px solid #86efac}.btn-s:hover{background:#bbf7d0}
 .btn-sm{padding:4px 9px;font-size:.78rem}
 
-/* NOTIF */
-.notif-list{display:flex;flex-direction:column;gap:11px}
-.nc{background:var(--card);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-right:4px solid;cursor:pointer}
-.nc.red{border-color:var(--danger)}.nc.amber{border-color:var(--warn)}.nc.green{border-color:var(--success)}
-.nc .nn{font-weight:600;font-size:.95rem}
-.nc .nm{font-size:.82rem;color:var(--muted);margin-top:2px}
-.nc .nd{font-size:1.35rem;font-weight:700;margin-right:auto}
-.nc.red .nd{color:var(--danger)}.nc.amber .nd{color:var(--warn)}.nc.green .nd{color:var(--success)}
-
 /* MODAL */
 .mo{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);z-index:200;justify-content:center;align-items:flex-start;padding:32px 14px;overflow-y:auto}
 .mo.open{display:flex}
@@ -251,8 +242,6 @@ textarea{resize:vertical;min-height:66px}
   .pending-card .pc-btns{width:100%;justify-content:flex-end}
   .lk-tabs{gap:6px}
   .lk-tab{padding:7px 14px;font-size:.84rem}
-  .nc{flex-wrap:wrap}
-  .nc .nd{margin-right:0}
 }
 @media(max-width:420px){
   .cards{grid-template-columns:1fr}
@@ -276,7 +265,6 @@ input,select,textarea{transition:border-color .18s,box-shadow .18s}
 nav{box-shadow:0 3px 14px rgba(0,0,0,.28)}
 .login-box{box-shadow:0 28px 70px rgba(0,0,0,.38)}
 .login-btn{transition:all .2s;letter-spacing:.02em;font-size:1.05rem}
-.nc{transition:box-shadow .2s}.nc:hover{box-shadow:0 4px 16px rgba(0,0,0,.12)}
 
 .um-section-title{font-size:.78rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.03em;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px dashed var(--border)}
 .um-section-title:first-child{margin-top:2px}
@@ -399,10 +387,6 @@ body.dark .sbb .bar{background:#2d3748}
 /* History */
 body.dark .ht th{background:#111827;color:#8899b4;border-bottom-color:#2d3748}
 body.dark .ht td{border-bottom-color:#1e2a3d;color:#ccd6ea}
-/* Notifications */
-body.dark .nc{background:#161d2c;box-shadow:0 2px 10px rgba(0,0,0,.4)}
-body.dark .nc .nn{color:#dde4f0}
-body.dark .nc .nm{color:#8899b4}
 /* Progress */
 body.dark .pb{background:#2d3748}
 body.dark .pb-label{color:#8899b4}
@@ -458,7 +442,6 @@ body.dark .mh{background:#161d2c}
 <div id="app-screen">
   <nav>
     <div class="logo">سنابل <span>الجوف</span></div>
-    <button class="nav-btn" id="nav-notifications" onclick="showPage('notifications',this)">الإشعارات</button>
     <button class="nav-btn" id="nav-lookups" style="display:none" onclick="showPage('lookups',this)">المرجعيات</button>
     <button class="nav-btn" id="nav-users" style="display:none" onclick="showPage('users',this)">المستخدمون</button>
     <button class="nav-btn" id="nav-orders" style="display:none" onclick="showPage('orders',this)">استقبال طلبات العملاء</button>
@@ -468,12 +451,6 @@ body.dark .mh{background:#161d2c}
   </nav>
 
   <main>
-    <!-- الإشعارات -->
-    <div id="page-notifications" class="page">
-      <div class="sh"><h1>الإشعارات</h1></div>
-      <div class="notif-list" id="notif-list"><div class="card" style="text-align:center;padding:40px;color:#6b7280">لا توجد إشعارات حالياً ✅</div></div>
-    </div>
-
     <!-- المرجعيات -->
     <div id="page-lookups" class="page">
       <div class="sh"><h1>إدارة المرجعيات</h1></div>
@@ -903,7 +880,6 @@ function showApp(){
   const hp = k => currentUser.role==='admin'||p.includes(k);
   // show nav buttons based on permissions
   document.querySelectorAll('.nav-btn').forEach(b=>{ if(b.id&&b.id.startsWith('nav-')) b.style.display='none'; });
-  if(hp('notifications')) document.getElementById('nav-notifications')&&(document.getElementById('nav-notifications').style.display='');
   if(hp('lookups')) document.getElementById('nav-lookups')&&(document.getElementById('nav-lookups').style.display='');
   if(hp('manage_users')) document.getElementById('nav-users')&&(document.getElementById('nav-users').style.display='');
   if(hp('order_requests')||hp('manage_orders')) document.getElementById('nav-orders')&&(document.getElementById('nav-orders').style.display='');
@@ -911,7 +887,7 @@ function showApp(){
   if(exportBtn) exportBtn.style.display = hasPerm('export_orders') ? '' : 'none';
   const newOrderBtn = document.getElementById('new-order-btn');
   if(newOrderBtn) newOrderBtn.style.display = (isAdmin()||hasPerm('create_orders')||hasPerm('order_requests')||hasPerm('manage_orders')) ? '' : 'none';
-  if(hp('notifications')||hp('lookups')) { fetchLookups(); fetchPending(); fetchPendingContacts(); }
+  if(hp('lookups')) { fetchLookups(); fetchPending(); fetchPendingContacts(); }
   fetchContacts();
   fetchSuppliers();
   if(hp('order_requests')||hp('manage_orders')) startOrdersPoller();
@@ -1382,7 +1358,6 @@ async function fetchUsers(){
 const PERM_CATEGORIES = [
   {title:'الوصول للأقسام', perms:[
     {key:'order_requests',  label:'استقبال طلبات العملاء'},
-    {key:'notifications',   label:'الإشعارات'},
     {key:'lookups',         label:'المرجعيات'},
     {key:'manage_users',    label:'إدارة المستخدمين'},
   ]},
