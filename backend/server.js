@@ -29,7 +29,7 @@ async function initDB() {
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin','user','requester') DEFAULT 'user',
+    role ENUM('admin','user') DEFAULT 'user',
     full_name VARCHAR(255),
     job_title VARCHAR(255),
     permissions TEXT,
@@ -107,7 +107,7 @@ async function initDB() {
   ) CHARACTER SET utf8mb4`);
 
 
-  await db.execute(`ALTER TABLE users MODIFY COLUMN role ENUM('admin','user','requester') DEFAULT 'user'`).catch(()=>{});
+  await db.execute(`ALTER TABLE users MODIFY COLUMN role ENUM('admin','user') DEFAULT 'user'`).catch(()=>{});
 
   await db.execute(`CREATE TABLE IF NOT EXISTS order_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -245,7 +245,7 @@ app.post('/users', auth, hasPerm('manage_users'), async (req, res) => {
     const db = await getPool();
     const hash = await bcrypt.hash(password, 10);
     const permsJson = permissions ? JSON.stringify(permissions) : null;
-    const [r] = await db.execute('INSERT INTO users (username,password_hash,role,full_name,job_title,permissions) VALUES (?,?,?,?,?,?)', [username, hash, ['admin','user','requester'].includes(role) ? role : 'user', full_name||null, job_title||null, permsJson]);
+    const [r] = await db.execute('INSERT INTO users (username,password_hash,role,full_name,job_title,permissions) VALUES (?,?,?,?,?,?)', [username, hash, ['admin','user'].includes(role) ? role : 'user', full_name||null, job_title||null, permsJson]);
     const [[u]] = await db.execute('SELECT id,username,role,full_name,job_title,permissions,created_at FROM users WHERE id=?', [r.insertId]);
     res.status(201).json(u);
   } catch (err) {
@@ -264,7 +264,7 @@ app.put('/users/:id', auth, hasPerm('manage_users'), async (req, res) => {
       permissions = self.permissions ? JSON.parse(self.permissions) : [];
     }
     const permsJson = permissions ? JSON.stringify(permissions) : null;
-    const safeRole = ['admin','user','requester'].includes(role) ? role : 'user';
+    const safeRole = ['admin','user'].includes(role) ? role : 'user';
     if (password) {
       const hash = await bcrypt.hash(password, 10);
       await db.execute('UPDATE users SET username=?,password_hash=?,role=?,full_name=?,job_title=?,permissions=? WHERE id=?', [username, hash, safeRole, full_name||null, job_title||null, permsJson, req.params.id]);
@@ -761,17 +761,11 @@ app.get('/clients/:id/consumption-rate', auth, async (req, res) => {
 
 
 // ─── ORDER REQUESTS ROUTES ────────────────────────────────────────────────────
-function requesterOrAdmin(req, res, next) {
-  if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'requester' && req.user.role !== 'user'))
-    return res.status(403).json({ error: 'غير مصرح' });
-  next();
-}
-
 app.get('/orders', auth, async (req, res) => {
   try {
     const db = await getPool();
     let rows;
-    const canSeeAll = req.user.role === 'admin' || req.user.role === 'requester' || (req.user.permissions||[]).some(p=>['order_requests','manage_orders'].includes(p));
+    const canSeeAll = req.user.role === 'admin' || (req.user.permissions||[]).some(p=>['order_requests','manage_orders'].includes(p));
     if (canSeeAll) {
       [rows] = await db.execute(
         `SELECT o.*, u.username FROM order_requests o
@@ -846,11 +840,11 @@ app.get('/orders/:id/history', auth, async (req, res) => {
 });
 
 app.put('/orders/:id/status', auth, (req,res,next)=>{
-  if(req.user.role==='admin'||req.user.role==='requester'||(req.user.permissions||[]).some(p=>['manage_orders','edit_all_orders','order_requests'].includes(p))) return next();
+  if(req.user.role==='admin'||(req.user.permissions||[]).some(p=>['manage_orders','edit_all_orders','order_requests'].includes(p))) return next();
   res.status(403).json({error:'ليس لديك صلاحية'});
 }, async (req, res) => {
   try {
-    const canChangeStatus = req.user.role==='admin' || req.user.role==='requester' || (req.user.permissions||[]).includes('manage_orders');
+    const canChangeStatus = req.user.role==='admin' || (req.user.permissions||[]).includes('manage_orders');
     let { status, delivery_status, admin_note } = req.body;
     if(!canChangeStatus){ status = undefined; admin_note = undefined; }
     if (status && !['approved','rejected','pending'].includes(status))
@@ -973,7 +967,7 @@ app.delete('/orders/:id', auth, async (req, res) => {
 app.get('/orders/chat-counts', auth, async (req, res) => {
   try {
     const db = await getPool();
-    const canSeeAll = req.user.role === 'admin' || req.user.role === 'requester'
+    const canSeeAll = req.user.role === 'admin'
       || (req.user.permissions || []).some(p => ['order_requests','manage_orders'].includes(p));
     let orderIds;
     if (canSeeAll) {
@@ -1000,7 +994,7 @@ app.get('/orders/:id/chat', auth, async (req, res) => {
     const db = await getPool();
     const [[order]] = await db.execute('SELECT id,user_id FROM order_requests WHERE id=?', [req.params.id]);
     if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
-    const canSee = req.user.role === 'admin' || req.user.role === 'requester'
+    const canSee = req.user.role === 'admin'
       || order.user_id === req.user.id
       || (req.user.permissions || []).some(p => ['order_requests','manage_orders'].includes(p));
     if (!canSee) return res.status(403).json({ error: 'غير مصرح' });
@@ -1023,7 +1017,7 @@ app.post('/orders/:id/chat', auth, async (req, res) => {
     const db = await getPool();
     const [[order]] = await db.execute('SELECT id,user_id FROM order_requests WHERE id=?', [req.params.id]);
     if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
-    const canSee = req.user.role === 'admin' || req.user.role === 'requester'
+    const canSee = req.user.role === 'admin'
       || order.user_id === req.user.id
       || (req.user.permissions || []).some(p => ['order_requests','manage_orders'].includes(p));
     if (!canSee) return res.status(403).json({ error: 'غير مصرح' });

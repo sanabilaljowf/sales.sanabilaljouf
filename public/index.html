@@ -804,7 +804,6 @@ body.dark .mh{background:#161d2c}
           <select id="ue-role" onchange="onRoleChange()">
             <option value="user">موظف</option>
             <option value="admin">مدير (كامل الصلاحيات)</option>
-            <option value="requester">مقدم طلبات فقط</option>
           </select>
         </div>
         <div id="perms-section" style="margin-top:14px">
@@ -900,21 +899,6 @@ function showApp(){
     document.getElementById('nav-lookups').style.display='';
     document.getElementById('nav-orders').style.display='';
   }
-  if(currentUser.role==='requester'){
-    document.querySelectorAll('.nav-btn').forEach(b=>b.style.display='none');
-    document.getElementById('nav-orders').style.display='';
-    document.getElementById('nav-lookups').style.display='';
-    const urlP = location.pathname.replace(/^\//,'').split('/')[0];
-    const startPage = (urlP==='lookups'||urlP==='orders') ? urlP : 'orders';
-    showPage(startPage,document.getElementById('nav-'+startPage));
-    fetchContacts();
-    fetchLookups();
-    fetchSuppliers();
-    const exportBtn = document.getElementById('export-excel-btn');
-    if(exportBtn) exportBtn.style.display = '';
-    startOrdersPoller();
-    return;
-  }
   const p = currentUser.permissions||[];
   const hp = k => currentUser.role==='admin'||p.includes(k);
   // show nav buttons based on permissions
@@ -926,7 +910,7 @@ function showApp(){
   const exportBtn = document.getElementById('export-excel-btn');
   if(exportBtn) exportBtn.style.display = hasPerm('export_orders') ? '' : 'none';
   const newOrderBtn = document.getElementById('new-order-btn');
-  if(newOrderBtn) newOrderBtn.style.display = (isAdmin()||currentUser.role==='requester'||hasPerm('create_orders')||hasPerm('order_requests')||hasPerm('manage_orders')) ? '' : 'none';
+  if(newOrderBtn) newOrderBtn.style.display = (isAdmin()||hasPerm('create_orders')||hasPerm('order_requests')||hasPerm('manage_orders')) ? '' : 'none';
   if(hp('notifications')||hp('lookups')) { fetchLookups(); fetchPending(); fetchPendingContacts(); }
   fetchContacts();
   fetchSuppliers();
@@ -1378,8 +1362,8 @@ async function fetchUsers(){
   if(!users.length){tb.innerHTML='<tr><td colspan="4" class="empty">لا يوجد مستخدمون</td></tr>';return;}
   const PERM_LABELS = buildPermLabels();
   tb.innerHTML=users.map(u=>{
-    const roleLabel = u.role==='admin'?'مدير':u.role==='requester'?'مقدم طلبات':'موظف';
-    const roleBadge = u.role==='admin'?'ba':u.role==='requester'?'bs':'bu';
+    const roleLabel = u.role==='admin'?'مدير':'موظف';
+    const roleBadge = u.role==='admin'?'ba':'bu';
     const perms = u.permissions ? (typeof u.permissions==='string'?JSON.parse(u.permissions):u.permissions) : [];
     const permBadges = u.role==='admin'?'<span class="badge bi">كامل</span>':perms.map(p=>`<span class="badge bu" style="font-size:.7rem;margin:1px">${esc(PERM_LABELS[p]||p)}</span>`).join('');
     return `<tr>
@@ -1508,10 +1492,9 @@ async function deleteUser(id){
 // ══════════════════════════════════════════════════
 let _suppressHistory = false;
 function showPage(name,btn,skipHistory){
-  if(currentUser&&currentUser.role==='requester'&&name!=='orders'&&name!=='lookups'){return;}
   if(!currentUser)return;
   if(name==='users'&&!isAdmin()&&!(currentUser.permissions||[]).includes('manage_users')){return;}
-  if(name==='lookups'&&!isAdmin()&&currentUser.role!=='requester'&&!(currentUser.permissions||[]).includes('lookups')){return;}
+  if(name==='lookups'&&!isAdmin()&&!(currentUser.permissions||[]).includes('lookups')){return;}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const pg = document.getElementById('page-'+name);
@@ -1904,7 +1887,7 @@ function renderOrders(list){
       +(canEdit?(
          '<button style="'+_bBase+'background:#dbeafe;color:#1d4ed8" onmouseover="this.style.background=\'#bfdbfe\'" onmouseout="this.style.background=\'#dbeafe\'" onclick="openOrderView('+o.id+')">عرض</button>'
         +'<button style="'+_bBase+'background:#dcfce7;color:#15803d" onmouseover="this.style.background=\'#bbf7d0\'" onmouseout="this.style.background=\'#dcfce7\'" onclick="openOrderModal('+o.id+')">تعديل</button>'
-        +((isAdmin()||currentUser.role==="requester"||(currentUser.permissions||[]).includes("manage_orders")||(currentUser.permissions||[]).includes("order_requests"))
+        +((isAdmin()||(currentUser.permissions||[]).includes("manage_orders")||(currentUser.permissions||[]).includes("order_requests"))
           ?'<button style="'+_bBase+'background:#fef3c7;color:#b45309" onmouseover="this.style.background=\'#fde68a\'" onmouseout="this.style.background=\'#fef3c7\'" onclick="openOrderStatusModal('+o.id+')">حالة</button>'
           :'<span></span>')
         +(hasPerm('chat_orders')?(function(){ const u=unreadCount(o.id); return '<button style="'+_bBase+'position:relative;background:#ecfdf5;color:#065f46" onmouseover="this.style.background=\'#bbf7d0\'" onmouseout="this.style.background=\'#ecfdf5\'" onclick="openOrderChat('+o.id+')">نقاش'+(u>0?'<span style="position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;min-width:14px;height:14px;display:flex;align-items:center;justify-content:center;padding:0 2px;line-height:1">'+u+'</span>':'')+'</button>'; })():'<span></span>')
@@ -2424,7 +2407,7 @@ function openOrderStatusModal(id){
   document.getElementById('osm-delivery').value=o.delivery_status||'';
   document.getElementById('osm-note').value=o.admin_note||'';
   // show/hide الحالة based on manage_orders permission only
-  const canChangeStatus = isAdmin() || currentUser.role==='requester' || (currentUser && (currentUser.permissions||[]).includes('manage_orders'));
+  const canChangeStatus = isAdmin() || (currentUser && (currentUser.permissions||[]).includes('manage_orders'));
   document.getElementById('osm-status').closest('.fg').style.display = canChangeStatus ? '' : 'none';
   document.getElementById('order-status-modal').classList.add('open');
 }
@@ -2434,7 +2417,7 @@ async function submitOrderStatus(){
   const body = {
     delivery_status: document.getElementById('osm-delivery').value,
   };
-  if(isAdmin()||currentUser.role==='requester'||(currentUser&&(currentUser.permissions||[]).includes('manage_orders'))){
+  if(isAdmin()||(currentUser&&(currentUser.permissions||[]).includes('manage_orders'))){
     body.status = document.getElementById('osm-status').value;
     body.admin_note = document.getElementById('osm-note').value.trim();
   }
