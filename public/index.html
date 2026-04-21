@@ -898,6 +898,8 @@ function showApp(){
     const btn = document.querySelector('[onclick*="showPage(\'' + wanted + '\'"]');
     if(btn && btn.style.display !== 'none') { showPage(wanted, btn); return; }
   }
+  const ordersBtn = document.getElementById('nav-orders');
+  if(ordersBtn && ordersBtn.style.display !== 'none') { ordersBtn.click(); return; }
   const firstBtn = document.querySelector('.nav-btn:not([style*="none"])') || document.querySelector('.nav-btn[style*="display"]');
   if(firstBtn) firstBtn.click();
 }
