@@ -85,10 +85,14 @@ tbody td{padding:10px 14px}
 #orders-list table tbody td{padding:10px 12px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #orders-list table tbody td strong{font-size:.83rem}
 #orders-list .badge{padding:3px 9px;font-size:.76rem}
-#orders-list td.col-green,#orders-list td.col-green *{color:#15803d!important;font-weight:700!important}
-#orders-list td.col-green .badge{background:transparent!important;border-color:#15803d!important}
-body.dark #orders-list td.col-green,body.dark #orders-list td.col-green *{color:#4ade80!important}
-body.dark #orders-list td.col-green .badge{border-color:#4ade80!important}
+#orders-list table thead th.col-green,#orders-list table thead th.col-green *{color:#15803d!important}
+body.dark #orders-list table thead th.col-green,body.dark #orders-list table thead th.col-green *{color:#4ade80!important}
+#orders-list table thead tr.phase-row th{padding:6px 10px;text-align:center;font-size:.8rem;font-weight:700;letter-spacing:.02em;border-bottom:1px solid var(--border)}
+#orders-list table thead tr.phase-row th.phase-empty{background:transparent;border-bottom:0}
+#orders-list table thead tr.phase-row th.phase-1,#orders-list table thead tr.phase-row th.phase-3{background:#dcfce7;color:#15803d;border-bottom:2px solid #86efac}
+#orders-list table thead tr.phase-row th.phase-2{background:#ffedd5;color:#9a3412;border-bottom:2px solid #fdba74}
+body.dark #orders-list table thead tr.phase-row th.phase-1,body.dark #orders-list table thead tr.phase-row th.phase-3{background:rgba(74,222,128,.14);color:#4ade80;border-bottom-color:rgba(74,222,128,.4)}
+body.dark #orders-list table thead tr.phase-row th.phase-2{background:rgba(245,158,11,.14);color:#fbbf24;border-bottom-color:rgba(245,158,11,.4)}
 #orders-list select{min-width:0!important;width:100%!important;padding:3px 5px!important;font-size:.76rem!important}
 /* pinned (sticky) last 3 columns */
 #orders-list table tbody td.pin-col{position:sticky;background:var(--card);z-index:2}
@@ -154,7 +158,7 @@ label{font-size:.82rem;font-weight:600;color:#374151}
 input,select,textarea{border:1px solid var(--border);border-radius:9px;padding:9px 13px;font-size:.87rem;width:100%;transition:.2s;font-family:inherit;direction:rtl;background:#fff;color:#1e293b}
 input[readonly]{background:#f1f5f9;color:#64748b;cursor:not-allowed}
 input[readonly]:focus{border-color:var(--border);box-shadow:none}
-body.dark input[readonly]{background:#0f1626;color:#7a8ba8;border-color:#1f2a3d}
+body.dark input[readonly]{background:#0f1626!important;color:#7a8ba8!important;border-color:#1f2a3d!important}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 input::placeholder{color:#b0bcc8}
 textarea{resize:vertical;min-height:66px}
@@ -1888,10 +1892,11 @@ const _colSortVal = {
   user:o=>o.username||'', invoice:o=>o.seq_no||o.id, created_at:o=>o.created_at||'',
   client:o=>o.client_name||'', phone:o=>o.phone||'', area:o=>o.area||'',
   responsible:o=>o.responsible_name||'', feed_type:o=>o.feed_type||'',
-  qty:o=>parseFloat(o.qty)||0, price:o=>parseFloat(o.price)||0,
-  sale_total:o=>(parseFloat(o.price)||0)*(parseFloat(o.qty)||0),
-  purchase_price:o=>parseFloat(o.purchase_price)||0,
-  purchase_total:o=>(parseFloat(o.purchase_price)||0)*(parseFloat(o.qty)||0),
+  qty:o=>parseFloat(o.qty)||0,
+  price:o=>{ if(o.price!=null) return parseFloat(o.price)||0; try{ const a=typeof o.order_items==='string'?JSON.parse(o.order_items):o.order_items; if(Array.isArray(a)&&a.length){ const tq=a.reduce((s,i)=>s+(parseFloat(i.qty)||0),0); const tp=a.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0); return tq>0?tp/tq:0; } }catch(e){} return 0; },
+  sale_total:o=>{ if(o.price!=null) return (parseFloat(o.price)||0)*(parseFloat(o.qty)||0); try{ const a=typeof o.order_items==='string'?JSON.parse(o.order_items):o.order_items; if(Array.isArray(a)) return a.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0); }catch(e){} return 0; },
+  purchase_price:o=>{ if(o.purchase_price!=null) return parseFloat(o.purchase_price)||0; try{ const a=typeof o.purchase_items==='string'?JSON.parse(o.purchase_items):o.purchase_items; if(Array.isArray(a)&&a.length){ const tq=a.reduce((s,i)=>s+(parseFloat(i.qty)||0),0); const tp=a.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0); return tq>0?tp/tq:0; } }catch(e){} return 0; },
+  purchase_total:o=>{ if(o.purchase_price!=null) return (parseFloat(o.purchase_price)||0)*(parseFloat(o.qty)||0); try{ const a=typeof o.purchase_items==='string'?JSON.parse(o.purchase_items):o.purchase_items; if(Array.isArray(a)) return a.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0); }catch(e){} return 0; },
   supplier_payment_status:o=>o.supplier_payment_status||'',
   client_payment_status:o=>o.client_payment_status||'',
   notes:o=>o.notes||'',
@@ -1956,8 +1961,22 @@ function renderOrders(list){
   const statusClass = {pending:'bw', approved:'bs', rejected:'bd'};
   const deliveryClass = {loading_wait:'bi', delivery_wait:'ba', in_delivery:'bwh', delivered:'bs'};
   const _w = s=>`style="width:${s};min-width:${s}"`;
-  const _th = (key,label,w)=>{ const icon=_sortKey===key?(_sortDir===1?'▲':'▼'):'▾'; const cls=_sortKey===key?(_sortDir===1?' asc':' desc'):''; return `<th style="width:${w};min-width:${w}" onclick="sortOrderCol('${key}')"><div class="col-th-inner${cls}">${label}<span class="col-sort-icon">${icon}</span></div></th>`; };
-  let rows = '<div class="tw"><table><thead><tr>'
+  const _GREEN_TH_KEYS = new Set(['invoice','created_at','client','phone','area','feed_type','qty','sale_date','invoice_number','price','sale_total','client_payment_status']);
+  const _th = (key,label,w)=>{ const icon=_sortKey===key?(_sortDir===1?'▲':'▼'):'▾'; const cls=_sortKey===key?(_sortDir===1?' asc':' desc'):''; const gcls=_GREEN_TH_KEYS.has(key)?' class="col-green"':''; return `<th${gcls} style="width:${w};min-width:${w}" onclick="sortOrderCol('${key}')"><div class="col-th-inner${cls}">${label}<span class="col-sort-icon">${icon}</span></div></th>`; };
+  const _PHASE1_KEYS=['user','invoice','created_at','client','phone','area','feed_type','qty'];
+  const _PHASE2_KEYS=['purchase_date','supplier','purchase_qty','purchase_price','purchase_total','purchase_invoice','supplier_payment_status','delivery_status'];
+  const _PHASE3_KEYS=['sale_date','invoice_number','price','sale_total','client_payment_status','notes'];
+  const _TAIL_KEYS=['status','match_status'];
+  const _vc = arr => arr.filter(k=>colV(k)).length;
+  const _p1=_vc(_PHASE1_KEYS), _p2=_vc(_PHASE2_KEYS), _p3=_vc(_PHASE3_KEYS);
+  const _tailCount=_vc(_TAIL_KEYS)+1;
+  let _phaseRow = '<tr class="phase-row">';
+  if(_p1) _phaseRow += `<th class="phase-cell phase-1" colspan="${_p1}">المرحلة الأولى</th>`;
+  if(_p2) _phaseRow += `<th class="phase-cell phase-2" colspan="${_p2}">المرحلة الثانية</th>`;
+  if(_p3) _phaseRow += `<th class="phase-cell phase-3" colspan="${_p3}">المرحلة الثالثة</th>`;
+  if(_tailCount) _phaseRow += `<th class="phase-empty" colspan="${_tailCount}"></th>`;
+  _phaseRow += '</tr>';
+  let rows = '<div class="tw"><table><thead>'+_phaseRow+'<tr class="main-head">'
     +(colV('user')?_th('user','المستخدم','90px'):'')
     +(colV('invoice')?_th('invoice','رقم الطلب','90px'):'')
     +(colV('created_at')?_th('created_at','تاريخ الطلب','110px'):'')
@@ -1990,31 +2009,47 @@ function renderOrders(list){
     const sc = statusClass[o.status]||'bu';
     const sl = statusLabel[o.status]||o.status;
     const qtyNum = parseFloat(o.qty)||0;
-    const saleTotal = (o.price!=null && o.qty) ? parseFloat(o.price)*qtyNum : null;
-    const purchTotal = (o.purchase_price!=null && o.qty) ? parseFloat(o.purchase_price)*qtyNum : null;
+    let _oi=[], _pi=[];
+    try { _oi = o.order_items ? (typeof o.order_items==='string'?JSON.parse(o.order_items):o.order_items) : []; } catch(e){}
+    try { _pi = o.purchase_items ? (typeof o.purchase_items==='string'?JSON.parse(o.purchase_items):o.purchase_items) : []; } catch(e){}
+    if(!Array.isArray(_oi)) _oi=[];
+    if(!Array.isArray(_pi)) _pi=[];
+    const _sItemsTot = _oi.reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)),0);
+    const _pItemsTot = _pi.reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.price)||0)),0);
+    const _sItemsQty = _oi.reduce((s,it)=>s+(parseFloat(it.qty)||0),0);
+    const _pItemsQty = _pi.reduce((s,it)=>s+(parseFloat(it.qty)||0),0);
+    const salePriceDisp  = (o.price!=null) ? parseFloat(o.price) : (_sItemsQty>0 && _sItemsTot>0 ? (_sItemsTot/_sItemsQty) : null);
+    const purchPriceDisp = (o.purchase_price!=null) ? parseFloat(o.purchase_price) : (_pItemsQty>0 && _pItemsTot>0 ? (_pItemsTot/_pItemsQty) : null);
+    const saleTotal  = (o.price!=null && o.qty) ? parseFloat(o.price)*qtyNum : (_sItemsTot>0 ? _sItemsTot : null);
+    const purchTotal = (o.purchase_price!=null && o.qty) ? parseFloat(o.purchase_price)*qtyNum : (_pItemsTot>0 ? _pItemsTot : null);
+    const _saleMulti  = _oi.length>1;
+    const _purchMulti = _pi.length>1;
+    const _mlSep = 'style="padding:1px 0;line-height:1.35"';
+    const _stackSale = (fn)=> _oi.map(it=>`<div ${_mlSep}>${fn(it)}</div>`).join('');
+    const _stackPurch = (fn)=> _pi.map(it=>`<div ${_mlSep}>${fn(it)}</div>`).join('');
     const payBadge = (val)=> val ? '<span class="badge '+(payStatusClass[val]||'bu')+'">'+(payStatusLabel[val]||esc(val))+'</span>' : '-';
     rows += '<tr>'
       +(colV('user')?'<td>'+esc(o.username||'-')+'</td>':'')
-      +(colV('invoice')?'<td class="col-green" style="text-align:center;font-weight:600;white-space:nowrap">sj-'+(o.seq_no||o.id)+'</td>':'')
-      +(colV('created_at')?'<td class="col-green" style="white-space:nowrap">'+(o.created_at?'<div>'+fmtDate(o.created_at)+'</div><div style="font-size:.65rem">'+fmtDateTime(o.created_at).slice(-5)+'</div>':'-')+'</td>':'')
-      +(colV('client')?'<td class="col-green"><strong>'+esc(o.client_name||'-')+'</strong></td>':'')
-      +(colV('phone')?'<td class="col-green"'+(o.phone?' style="direction:ltr;text-align:right"':'')+'>'+esc(o.phone||'-')+'</td>':'')
-      +(colV('area')?'<td class="col-green">'+esc(o.area||'-')+'</td>':'')
-      +(colV('feed_type')?'<td class="col-green">'+esc(o.feed_type||'-')+'</td>':'')
-      +(colV('qty')?'<td class="col-green">'+(o.qty?Math.round(qtyNum):'-')+'</td>':'')
+      +(colV('invoice')?'<td style="text-align:center;font-weight:600;white-space:nowrap">sj-'+(o.seq_no||o.id)+'</td>':'')
+      +(colV('created_at')?'<td style="white-space:nowrap">'+(o.created_at?'<div>'+fmtDate(o.created_at)+'</div><div style="font-size:.65rem">'+fmtDateTime(o.created_at).slice(-5)+'</div>':'-')+'</td>':'')
+      +(colV('client')?'<td><strong>'+esc(o.client_name||'-')+'</strong></td>':'')
+      +(colV('phone')?'<td'+(o.phone?' style="direction:ltr;text-align:right"':'')+'>'+esc(o.phone||'-')+'</td>':'')
+      +(colV('area')?'<td>'+esc(o.area||'-')+'</td>':'')
+      +(colV('feed_type')?'<td>'+(_saleMulti?_stackSale(it=>esc(it.feed_type||'-')):esc(o.feed_type||'-'))+'</td>':'')
+      +(colV('qty')?'<td>'+(_saleMulti?_stackSale(it=>it.qty!=null?Math.round(parseFloat(it.qty)||0):'-'):(o.qty?Math.round(qtyNum):'-'))+'</td>':'')
       +(colV('purchase_date')?'<td>'+(o.purchase_date?fmtDate(o.purchase_date):'-')+'</td>':'')
       +(colV('supplier')?'<td>'+esc(o.supplier||'-')+'</td>':'')
-      +(colV('purchase_qty')?'<td>'+(o.purchase_qty!=null?fmt(o.purchase_qty,0):'-')+'</td>':'')
-      +(colV('purchase_price')?'<td>'+(o.purchase_price!=null?fmtMoney(o.purchase_price):'-')+'</td>':'')
+      +(colV('purchase_qty')?'<td>'+(_purchMulti?_stackPurch(it=>it.qty!=null?Math.round(parseFloat(it.qty)||0):'-'):(o.purchase_qty!=null?fmt(o.purchase_qty,0):'-'))+'</td>':'')
+      +(colV('purchase_price')?'<td>'+(_purchMulti?_stackPurch(it=>it.price!=null?fmtMoney(it.price):'-'):(purchPriceDisp!=null?fmtMoney(purchPriceDisp):'-'))+'</td>':'')
       +(colV('purchase_total')?'<td>'+(purchTotal!=null?'<strong>'+fmtMoney(purchTotal)+'</strong>':'-')+'</td>':'')
       +(colV('purchase_invoice')?'<td>'+esc(o.purchase_invoice||'-')+'</td>':'')
       +(colV('supplier_payment_status')?'<td>'+payBadge(o.supplier_payment_status)+'</td>':'')
       +(colV('delivery_status')?(o.delivery_status?'<td><span class="badge '+(deliveryClass[o.delivery_status]||'bu')+'">'+esc(deliveryLabel[o.delivery_status]||o.delivery_status)+'</span></td>':'<td>-</td>'):'')
-      +(colV('sale_date')?'<td class="col-green">'+(o.sale_date?fmtDate(o.sale_date):'-')+'</td>':'')
-      +(colV('invoice_number')?'<td class="col-green">'+esc(o.invoice_number||'-')+'</td>':'')
-      +(colV('price')?'<td class="col-green">'+(o.price!=null?fmtMoney(o.price):'-')+'</td>':'')
-      +(colV('sale_total')?'<td class="col-green">'+(saleTotal!=null?'<strong>'+fmtMoney(saleTotal)+'</strong>':'-')+'</td>':'')
-      +(colV('client_payment_status')?'<td class="col-green">'+payBadge(o.client_payment_status)+'</td>':'')
+      +(colV('sale_date')?'<td>'+(o.sale_date?fmtDate(o.sale_date):'-')+'</td>':'')
+      +(colV('invoice_number')?'<td>'+esc(o.invoice_number||'-')+'</td>':'')
+      +(colV('price')?'<td>'+(_saleMulti?_stackSale(it=>it.price!=null?fmtMoney(it.price):'-'):(salePriceDisp!=null?fmtMoney(salePriceDisp):'-'))+'</td>':'')
+      +(colV('sale_total')?'<td>'+(saleTotal!=null?'<strong>'+fmtMoney(saleTotal)+'</strong>':'-')+'</td>':'')
+      +(colV('client_payment_status')?'<td>'+payBadge(o.client_payment_status)+'</td>':'')
       +(colV('notes')?'<td style="font-size:.8rem;white-space:pre-wrap;max-width:220px">'+esc(o.notes||'-')+'</td>':'')
       +(colV('status')?'<td><span class="badge '+sc+'">'+sl+'</span></td>':'')
       +(colV('match_status')?(function(){
@@ -2061,7 +2096,7 @@ function applyPinnedColumns(){
   if(!tbl) return;
   // Clear any previous pin state so the function is idempotent.
   tbl.querySelectorAll('.pin-col').forEach(c=>{ c.classList.remove('pin-col','pin-edge'); c.style.left=''; });
-  const headRow = tbl.querySelector('thead tr');
+  const headRow = tbl.querySelector('thead tr.main-head') || tbl.querySelector('thead tr');
   if(!headRow) return;
   const headCells = headRow.children;
   const n = headCells.length;
@@ -2684,35 +2719,61 @@ function exportOrdersExcel(){
   const payLabel = {paid:'مدفوع', unpaid:'غير مدفوع', partial:'جزئي'};
   const rows = [];
   list.forEach(o => {
-    const qty = parseFloat(o.qty)||0;
-    const price = parseFloat(o.price)||0;
-    const pprice = parseFloat(o.purchase_price)||0;
-    rows.push({
-      'المستخدم':               o.username||'-',
-      'رقم الطلب':              'sj-'+(o.seq_no||o.id),
-      'تاريخ الطلب':            o.created_at ? fmtDate(o.created_at) : '-',
-      'اسم العميل':             o.client_name||'-',
-      'هاتف العميل':            o.phone||'-',
-      'المنطقة':                o.area||'-',
-      'الصنف':                  o.feed_type||'-',
-      'كمية البيع':             qty,
-      'تاريخ الشراء':           o.purchase_date ? fmtDate(o.purchase_date) : '-',
-      'المورد':                 o.supplier||'-',
-      'كمية الشراء':            o.purchase_qty!=null ? parseFloat(o.purchase_qty) : '-',
-      'سعر الشراء':             o.purchase_price!=null ? pprice : '-',
-      'اجمالي سعر الشراء':      o.purchase_price!=null ? qty*pprice : '-',
-      'رقم فاتورة المورد':      o.purchase_invoice||'-',
-      'حالة السداد للمورد':     payLabel[o.supplier_payment_status]||'-',
-      'حالة التوصيل':           deliveryLabel[o.delivery_status]||'-',
-      'تاريخ البيع':            o.sale_date ? fmtDate(o.sale_date) : '-',
-      'رقم فاتورة البيع':       o.invoice_number||'-',
-      'سعر البيع':              o.price!=null ? price : '-',
-      'اجمالي سعر البيع':       o.price!=null ? qty*price : '-',
-      'حالة السداد للعميل':     payLabel[o.client_payment_status]||'-',
-      'الحالة':                 statusLabel[o.status]||o.status||'-',
-      'حالة المطابقة':          matchLabel[o.match_status]||'-',
-      'ملاحظات':                o.notes||'-',
-    });
+    let _xoi=[], _xpi=[];
+    try { _xoi = o.order_items ? (typeof o.order_items==='string'?JSON.parse(o.order_items):o.order_items) : []; } catch(e){}
+    try { _xpi = o.purchase_items ? (typeof o.purchase_items==='string'?JSON.parse(o.purchase_items):o.purchase_items) : []; } catch(e){}
+    if(!Array.isArray(_xoi)) _xoi=[]; if(!Array.isArray(_xpi)) _xpi=[];
+    // legacy fallback — synthesize a single item from flat columns when JSON is empty
+    if(_xoi.length===0 && (o.feed_type||o.qty!=null||o.price!=null)){
+      _xoi = [{feed_type:o.feed_type, qty:o.qty, price:o.price}];
+    }
+    if(_xpi.length===0 && (o.purchase_qty!=null||o.purchase_price!=null||o.purchase_feed_type)){
+      _xpi = [{feed_type:o.purchase_feed_type, qty:o.purchase_qty, price:o.purchase_price}];
+    }
+    const _xsTot=_xoi.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0);
+    const _xpTot=_xpi.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.price)||0)),0);
+
+    const N = Math.max(1, _xoi.length, _xpi.length);
+    for(let i=0; i<N; i++){
+      const si = _xoi[i] || null;
+      const pi = _xpi[i] || null;
+      const isFirst = i===0;
+      const iSaleFeed  = si ? (si.feed_type||'-') : '';
+      const iSaleQty   = si && si.qty!=null   ? parseFloat(si.qty)   : '';
+      const iSalePrice = si && si.price!=null ? parseFloat(si.price) : '';
+      const iPurchQty  = pi && pi.qty!=null   ? parseFloat(pi.qty)   : '';
+      const iPurchPrice= pi && pi.price!=null ? parseFloat(pi.price) : '';
+      const iSaleLine  = (iSaleQty!==''  && iSalePrice!=='')  ? iSaleQty*iSalePrice   : '';
+      const iPurchLine = (iPurchQty!=='' && iPurchPrice!=='') ? iPurchQty*iPurchPrice : '';
+      rows.push({
+        'المستخدم':               isFirst ? (o.username||'-') : '',
+        'رقم الطلب':              isFirst ? 'sj-'+(o.seq_no||o.id) : '',
+        'تاريخ الطلب':            isFirst ? (o.created_at?fmtDate(o.created_at):'-') : '',
+        'اسم العميل':             isFirst ? (o.client_name||'-') : '',
+        'هاتف العميل':            isFirst ? (o.phone||'-') : '',
+        'المنطقة':                isFirst ? (o.area||'-') : '',
+        'الصنف':                  iSaleFeed,
+        'كمية البيع':             iSaleQty,
+        'سعر البيع':              iSalePrice,
+        'اجمالي البيع للصنف':     iSaleLine,
+        'اجمالي سعر البيع':       isFirst ? (_xsTot>0?_xsTot:'-') : '',
+        'تاريخ الشراء':           isFirst ? (o.purchase_date?fmtDate(o.purchase_date):'-') : '',
+        'المورد':                 isFirst ? (o.supplier||'-') : '',
+        'كمية الشراء':            iPurchQty,
+        'سعر الشراء':             iPurchPrice,
+        'اجمالي الشراء للصنف':    iPurchLine,
+        'اجمالي سعر الشراء':      isFirst ? (_xpTot>0?_xpTot:'-') : '',
+        'رقم فاتورة المورد':      isFirst ? (o.purchase_invoice||'-') : '',
+        'حالة السداد للمورد':     isFirst ? (payLabel[o.supplier_payment_status]||'-') : '',
+        'حالة التوصيل':           isFirst ? (deliveryLabel[o.delivery_status]||'-') : '',
+        'تاريخ البيع':            isFirst ? (o.sale_date?fmtDate(o.sale_date):'-') : '',
+        'رقم فاتورة البيع':       isFirst ? (o.invoice_number||'-') : '',
+        'حالة السداد للعميل':     isFirst ? (payLabel[o.client_payment_status]||'-') : '',
+        'الحالة':                 isFirst ? (statusLabel[o.status]||o.status||'-') : '',
+        'حالة المطابقة':          isFirst ? (matchLabel[o.match_status]||'-') : '',
+        'ملاحظات':                isFirst ? (o.notes||'-') : '',
+      });
+    }
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -2883,15 +2944,17 @@ window.addEventListener('resize', updateScrollBtns);
     btnLeft.style.display  = show ? 'flex' : 'none';
     btnRight.style.display = show ? 'flex' : 'none';
   }
-  // Continuous scroll while button is held (mouse/touch)
-  let _hRaf = null;
-  function stopHScroll(){ if(_hRaf){ cancelAnimationFrame(_hRaf); _hRaf = null; } }
-  function startHScroll(direction){
-    stopHScroll();
+  // Short click = one discrete hard step. Long press = smooth continuous scroll.
+  function stepScroll(direction){
     const t = findScrollTarget(); if(!t) return;
-    // Immediate small nudge for a crisp first click
-    t.scrollLeft += direction * 20;
-    const speed = 6; // px per frame (~60fps => ~360 px/s)
+    const step = Math.max(160, Math.round(t.clientWidth * 0.22));
+    t.scrollLeft += direction * step;
+  }
+  let _hRaf = null, _holdTimer = null, _didHold = false;
+  function stopHScroll(){ if(_hRaf){ cancelAnimationFrame(_hRaf); _hRaf = null; } if(_holdTimer){ clearTimeout(_holdTimer); _holdTimer = null; } }
+  function startHoldScroll(direction){
+    _didHold = true;
+    const speed = 7; // px per frame (~420 px/s)
     function step(){
       const tgt = findScrollTarget(); if(!tgt){ _hRaf = null; return; }
       tgt.scrollLeft += direction * speed;
@@ -2899,27 +2962,28 @@ window.addEventListener('resize', updateScrollBtns);
     }
     _hRaf = requestAnimationFrame(step);
   }
-  function bindHold(btn, direction){
-    btn.addEventListener('mousedown', e=>{ e.preventDefault(); startHScroll(direction); });
-    btn.addEventListener('touchstart', e=>{ e.preventDefault(); startHScroll(direction); }, {passive:false});
-    btn.addEventListener('mouseup', stopHScroll);
-    btn.addEventListener('mouseleave', stopHScroll);
-    btn.addEventListener('touchend', stopHScroll);
-    btn.addEventListener('touchcancel', stopHScroll);
+  function bindPress(btn, direction){
+    const onDown = (e)=>{
+      e.preventDefault();
+      stopHScroll();
+      _didHold = false;
+      _holdTimer = setTimeout(()=>{ startHoldScroll(direction); }, 220);
+    };
+    const onUp = (e)=>{
+      if(_holdTimer){ clearTimeout(_holdTimer); _holdTimer = null; }
+      const wasHold = _didHold;
+      stopHScroll();
+      if(!wasHold){ stepScroll(direction); }
+    };
+    btn.addEventListener('mousedown',  onDown);
+    btn.addEventListener('touchstart', onDown, {passive:false});
+    btn.addEventListener('mouseup',    onUp);
+    btn.addEventListener('mouseleave', ()=>{ if(_didHold) stopHScroll(); if(_holdTimer){ clearTimeout(_holdTimer); _holdTimer = null; } });
+    btn.addEventListener('touchend',   onUp);
+    btn.addEventListener('touchcancel',()=>{ stopHScroll(); });
   }
-  bindHold(btnLeft,  -1);
-  bindHold(btnRight, +1);
-  // double-click → jump to the far end in that direction
-  btnLeft.addEventListener('dblclick', ()=>{
-    stopHScroll();
-    const t = findScrollTarget(); if(!t) return;
-    t.scrollLeft = -t.scrollWidth;
-  });
-  btnRight.addEventListener('dblclick', ()=>{
-    stopHScroll();
-    const t = findScrollTarget(); if(!t) return;
-    t.scrollLeft =  t.scrollWidth;
-  });
+  bindPress(btnLeft,  -1);
+  bindPress(btnRight, +1);
   window.addEventListener('blur', stopHScroll);
   document.body.appendChild(btnLeft);
   document.body.appendChild(btnRight);
